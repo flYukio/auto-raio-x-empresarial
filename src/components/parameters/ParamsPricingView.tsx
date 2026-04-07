@@ -10,6 +10,9 @@ interface PricingRole {
   role: string;
   base_salary: number;
   hr_rate: number;
+  base_salary_1?: number;
+  base_salary_2?: number;
+  base_salary_3?: number;
   active: boolean;
 }
 
@@ -26,7 +29,23 @@ function PricingRolesManager() {
   const [roleName, setRoleName] = useState('');
   const [baseSalary, setBaseSalary] = useState<number | ''>('');
   const [hrRate, setHrRate] = useState<number | ''>('');
+  const [fx1Salary, setFx1Salary] = useState<number | ''>('');
+  const [fx2Salary, setFx2Salary] = useState<number | ''>('');
+  const [fx3Salary, setFx3Salary] = useState<number | ''>('');
   const [isActive, setIsActive] = useState(true);
+
+  // Auto-calculate ranges logic
+  useEffect(() => {
+    if (baseSalary !== '' && hrRate !== '') {
+      const b = Number(baseSalary);
+      const r = Number(hrRate);
+      
+      // Calculate according to user's desired logic: Base * Mult * Rate
+      setFx1Salary(Math.round(calculateFx(b, r, type, 0.8)));
+      setFx2Salary(Math.round(calculateFx(b, r, type, 1.0)));
+      setFx3Salary(Math.round(calculateFx(b, r, type, 1.2)));
+    }
+  }, [baseSalary, hrRate, type]);
 
   // Filter and Sort state
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,6 +82,9 @@ function PricingRolesManager() {
       setRoleName(role.role);
       setBaseSalary(role.base_salary);
       setHrRate(role.hr_rate);
+      setFx1Salary(role.base_salary_1 || '');
+      setFx2Salary(role.base_salary_2 || '');
+      setFx3Salary(role.base_salary_3 || '');
       setIsActive(role.active !== false);
     } else {
       setEditingRole(null);
@@ -71,6 +93,9 @@ function PricingRolesManager() {
       setRoleName('');
       setBaseSalary('');
       setHrRate('');
+      setFx1Salary('');
+      setFx2Salary('');
+      setFx3Salary('');
       setIsActive(true);
     }
     setIsModalOpen(true);
@@ -93,6 +118,9 @@ function PricingRolesManager() {
         role: roleName,
         base_salary: Number(baseSalary),
         hr_rate: Number(hrRate),
+        base_salary_1: Number(fx1Salary),
+        base_salary_2: Number(fx2Salary),
+        base_salary_3: Number(fx3Salary),
         active: isActive
       };
 
@@ -251,7 +279,7 @@ function PricingRolesManager() {
                   Taxa RH <SortIndicator columnKey="hr_rate" />
                 </th>
                 <th className="px-4 py-3 font-medium text-right">fx1 (80%)</th>
-                <th className="px-4 py-3 font-medium text-right">fx2 (100%)</th>
+                <th className="px-4 py-3 font-medium text-right text-primary">fx2 (100%)</th>
                 <th className="px-4 py-3 font-medium text-right">fx3 (120%)</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium text-center">Ações</th>
@@ -276,9 +304,9 @@ function PricingRolesManager() {
                     <td className="px-4 py-3 font-medium">{r.role}</td>
                     <td className="px-4 py-3 text-right">{formatCurrency(r.base_salary)}</td>
                     <td className="px-4 py-3 text-right">{r.hr_rate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-3 text-right text-text-secondary">{formatCurrency(calculateFx(r.base_salary, r.hr_rate, r.type, 0.8))}</td>
-                    <td className="px-4 py-3 text-right font-medium text-primary">{formatCurrency(calculateFx(r.base_salary, r.hr_rate, r.type, 1.0))}</td>
-                    <td className="px-4 py-3 text-right text-text-secondary">{formatCurrency(calculateFx(r.base_salary, r.hr_rate, r.type, 1.2))}</td>
+                    <td className="px-4 py-3 text-right text-text-secondary">{formatCurrency(r.base_salary_1 || 0)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-primary">{formatCurrency(r.base_salary_2 || 0)}</td>
+                    <td className="px-4 py-3 text-right text-text-secondary">{formatCurrency(r.base_salary_3 || 0)}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-md text-xs font-medium ${r.active !== false ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
                         {r.active !== false ? 'Ativo' : 'Inativo'}
@@ -367,17 +395,21 @@ function PricingRolesManager() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-1">Valor Base Salário (R$)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={baseSalary}
-                      onChange={(e) => setBaseSalary(e.target.value ? Number(e.target.value) : '')}
-                      required
-                      className="w-full bg-element-bg border border-border-subtle rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary transition-colors"
-                      placeholder="0.00"
-                    />
+                    <label className="block text-sm font-medium text-text-secondary mb-1">Valor Base Salário</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm font-medium">R$</span>
+                      <input
+                        type="text"
+                        value={baseSalary !== '' ? Number(baseSalary).toLocaleString('pt-BR') : ''}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setBaseSalary(val ? parseInt(val) : '');
+                        }}
+                        required
+                        className="w-full bg-element-bg border border-border-subtle rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary transition-colors"
+                        placeholder="0"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-1">Taxa de RH (Valor)</label>
@@ -405,31 +437,63 @@ function PricingRolesManager() {
                   </div>
                 </div>
 
-                {/* Preview dos cálculos */}
-                {(baseSalary !== '' && hrRate !== '') && (
-                  <div className="mt-6 p-4 bg-element-bg rounded-xl border border-border-subtle">
-                    <h4 className="text-sm font-medium mb-3 text-text-secondary">Preview dos Cálculos</h4>
+                <div className="md:col-span-2">
+                  <div className="p-4 bg-primary/5 rounded-xl border border-primary/20">
+                    <h4 className="text-sm font-bold mb-3 text-primary">Faixas Salariais (Calculadas Automaticamente)</h4>
                     <div className="grid grid-cols-3 gap-4">
-                      <div className="p-3 bg-surface rounded-lg border border-border-subtle">
-                        <div className="text-xs text-text-secondary mb-1">fx1 (80%)</div>
-                        <div className="font-medium">{formatCurrency(calculateFx(Number(baseSalary), Number(hrRate), type, 0.8))}</div>
+                      <div>
+                        <label className="block text-[10px] text-text-secondary uppercase mb-1">fx1 (80% + RH)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-xs">R$</span>
+                          <input
+                            type="text"
+                            value={fx1Salary !== '' ? Number(fx1Salary).toLocaleString('pt-BR') : ''}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              setFx1Salary(val ? parseInt(val) : '');
+                            }}
+                            className="w-full bg-surface border border-border-subtle rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
+                          />
+                        </div>
                       </div>
-                      <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-                        <div className="text-xs text-primary mb-1">fx2 (100%)</div>
-                        <div className="font-bold text-primary">{formatCurrency(calculateFx(Number(baseSalary), Number(hrRate), type, 1.0))}</div>
+                      <div>
+                        <label className="block text-[10px] text-primary uppercase mb-1 font-bold">fx2 (100% + RH)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary/60 text-xs">R$</span>
+                          <input
+                            type="text"
+                            value={fx2Salary !== '' ? Number(fx2Salary).toLocaleString('pt-BR') : ''}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              setFx2Salary(val ? parseInt(val) : '');
+                            }}
+                            className="w-full bg-surface border border-primary/30 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
+                          />
+                        </div>
                       </div>
-                      <div className="p-3 bg-surface rounded-lg border border-border-subtle">
-                        <div className="text-xs text-text-secondary mb-1">fx3 (120%)</div>
-                        <div className="font-medium">{formatCurrency(calculateFx(Number(baseSalary), Number(hrRate), type, 1.2))}</div>
+                      <div>
+                        <label className="block text-[10px] text-text-secondary uppercase mb-1">fx3 (120% + RH)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-xs">R$</span>
+                          <input
+                            type="text"
+                            value={fx3Salary !== '' ? Number(fx3Salary).toLocaleString('pt-BR') : ''}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              setFx3Salary(val ? parseInt(val) : '');
+                            }}
+                            className="w-full bg-surface border border-border-subtle rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <p className="text-xs text-text-secondary mt-3">
+                    <p className="text-[10px] text-text-secondary mt-3 italic">
                       {type === 'MOI' 
-                        ? 'Cálculo MOI: Valor Base * Percentual * Taxa RH' 
-                        : 'Cálculo MOE: Valor Base * Percentual (Taxa RH ignorada)'}
+                        ? '* Para MOI, os valores acima já contemplam a Taxa de RH acumulada.' 
+                        : '* Para MOE, a Taxa de RH é ignorada conforme regra de negócio.'}
                     </p>
                   </div>
-                )}
+                </div>
 
                 <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-border-subtle">
                   <button
@@ -470,43 +534,93 @@ const pricingTiers = [
   { id: 10, min: 300001, max: 400000, franchise: 203175, unit: 0.677, excess: 0.450 },
 ];
 
-function PricingSimulator({ model }: { model: 'cascata' | 'serrote' | 'block' }) {
+const agingTiers = [
+  { id: 1, label: '0-90 dias', fee: 8 },
+  { id: 2, label: '91-180 dias', fee: 12 },
+  { id: 3, label: '181-360 dias', fee: 18 },
+  { id: 4, label: '+360 dias', fee: 25 },
+];
+
+function PricingSimulator({ model }: { model: 'cascata' | 'serrote' | 'block' | 'license' | 'success_fee' }) {
   const [volume, setVolume] = useState<number>(1500);
   const [hasFranchise, setHasFranchise] = useState<boolean>(true);
   const [contractedTierId, setContractedTierId] = useState<number>(2);
+
+  // States for License model
+  const [solutionCost, setSolutionCost] = useState<number>(700);
+  const [ebitdaMargin, setEbitdaMargin] = useState<number>(40);
+  const [taxRate, setTaxRate] = useState<number>(10.15);
+
+  // States for Success Fee model
+  const [portfolioValue, setPortfolioValue] = useState<number>(1000000);
+  const [recoveryRate, setRecoveryRate] = useState<number>(15);
+  const [installmentMix, setInstallmentMix] = useState<number>(60);
+  const [successFeePercent, setSuccessFeePercent] = useState<number>(12);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
+  const formatUnit = (value: number) => {
+    return value.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  };
+
   const renderSimulationResult = () => {
     if (model === 'serrote') {
       const tier = pricingTiers.find(t => volume >= t.min && volume <= t.max) || pricingTiers[pricingTiers.length - 1];
-      let total = 0;
-      let explanation = '';
-
       if (hasFranchise) {
+        let total = 0;
+        let explanation = '';
+        
         if (tier.id === 1) {
-          total = tier.franchise;
-          explanation = `Faixa 1: Regra para o final da faixa. Valor fixo da franquia = ${formatCurrency(total)}.`;
+          total = tier.unit * tier.max;
+          explanation = `Faixa 1: Franquia base (Até ${tier.max.toLocaleString('pt-BR')} un. × ${formatUnit(tier.unit)}) = ${formatCurrency(total)}.`;
         } else {
-          const excessVolume = volume - tier.min;
-          const excessCost = excessVolume * tier.excess;
-          total = tier.franchise + excessCost;
-          explanation = `Faixa ${tier.id}: Franquia (${formatCurrency(tier.franchise)}) + Excedente (${excessVolume.toLocaleString('pt-BR')} un. × ${formatCurrency(tier.excess)} = ${formatCurrency(excessCost)})`;
-        }
-      } else {
-        total = volume * tier.unit;
-        explanation = `Faixa ${tier.id} (Sem Franquia): ${volume.toLocaleString('pt-BR')} un. × ${formatCurrency(tier.unit)} (Valor Unitário) = ${formatCurrency(total)}`;
-      }
+          // Cumulative cost up to previous tier
+          const previousTiers = pricingTiers.slice(0, pricingTiers.indexOf(tier));
+          const baseCost = previousTiers.reduce((acc, t, idx) => {
+            const prevMax = idx === 0 ? 0 : previousTiers[idx-1].max;
+            const capacity = t.max - prevMax;
+            const rate = idx === 0 ? t.unit : t.excess; // This depends on business rule, but for Serrote with franchise, let's use the progression
+            // Actually, per user formula: Previous Total is the current Franchise
+            return acc; // We'll calculate it differently below to match the "Custo Total Faixa" logic
+          }, 0);
 
-      return (
-        <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-xl">
-          <div className="text-sm text-primary mb-1">Receita Estimada</div>
-          <div className="text-2xl font-bold text-primary mb-2">{formatCurrency(total)}</div>
-          <div className="text-xs text-text-secondary">{explanation}</div>
-        </div>
-      );
+          // Let's use a simpler recursive-style absolute calculation to match the table
+          const getTierTotal = (tId: number): number => {
+            const t = pricingTiers.find(p => p.id === tId)!;
+            if (t.id === 1) return t.unit * t.max;
+            const prevTotal = getTierTotal(t.id - 1);
+            const prevMax = pricingTiers.find(p => p.id === t.id - 1)!.max;
+            return prevTotal + (t.max - prevMax) * t.excess;
+          };
+
+          const franchise = getTierTotal(tier.id - 1);
+          const prevTierMax = pricingTiers.find(p => p.id === tier.id - 1)!.max;
+          const excessVolume = volume - prevTierMax;
+          const excessCost = excessVolume * tier.excess;
+          total = franchise + excessCost;
+          explanation = `Faixa ${tier.id}: Franquia Acumulada (${formatCurrency(franchise)}) + Excedente (${excessVolume.toLocaleString('pt-BR')} un. × R$ ${formatUnit(tier.excess)} = ${formatCurrency(excessCost)})`;
+        }
+
+        return (
+          <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-xl">
+            <div className="text-sm text-primary mb-1">Receita Estimada</div>
+            <div className="text-2xl font-bold text-primary mb-2">{formatCurrency(total)}</div>
+            <div className="text-xs text-text-secondary">{explanation}</div>
+          </div>
+        );
+      } else {
+        const total = volume * tier.unit;
+        const explanation = `Faixa ${tier.id} (Sem Franquia): ${volume.toLocaleString('pt-BR')} un. × R$ ${formatUnit(tier.unit)} = ${formatCurrency(total)}`;
+        return (
+          <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-xl">
+            <div className="text-sm text-primary mb-1">Receita Estimada</div>
+            <div className="text-2xl font-bold text-primary mb-2">{formatCurrency(total)}</div>
+            <div className="text-xs text-text-secondary">{explanation}</div>
+          </div>
+        );
+      }
     }
 
     if (model === 'cascata') {
@@ -516,17 +630,18 @@ function PricingSimulator({ model }: { model: 'cascata' | 'serrote' | 'block' })
 
       for (const tier of pricingTiers) {
         if (remaining <= 0) break;
-        const tierCapacity = tier.id === 1 ? tier.max : (tier.max - tier.min + 1);
+        const tierCapacity = tier.id === 1 ? tier.max : (tier.max - pricingTiers[pricingTiers.indexOf(tier) - 1].max);
         const volumeInTier = Math.min(remaining, tierCapacity);
-        const cost = volumeInTier * tier.excess;
+        const cost = volumeInTier * tier.unit;
         total += cost;
         remaining -= volumeInTier;
-        breakdown.push(`Faixa ${tier.id}: ${volumeInTier.toLocaleString('pt-BR')} un. × ${formatCurrency(tier.excess)} = ${formatCurrency(cost)}`);
+        breakdown.push(`Faixa ${tier.id}: ${volumeInTier.toLocaleString('pt-BR')} un. × R$ ${formatUnit(tier.unit)} = ${formatCurrency(cost)}`);
       }
 
       let explanation = breakdown.join(' | ');
-      if (hasFranchise && total < pricingTiers[0].franchise) {
-        total = pricingTiers[0].franchise;
+      const minFranchise = pricingTiers[0].unit * pricingTiers[0].max;
+      if (hasFranchise && total < minFranchise) {
+        total = minFranchise;
         explanation += ` -> Aplicada franquia mínima de ${formatCurrency(total)}`;
       }
 
@@ -545,10 +660,12 @@ function PricingSimulator({ model }: { model: 'cascata' | 'serrote' | 'block' })
       let explanation = `Bloco contratado: Faixa ${tier.id} (até ${tier.max.toLocaleString('pt-BR')} un.) = ${formatCurrency(tier.franchise)}`;
 
       if (volume > tier.max) {
+        const implicitUnit = tier.franchise / tier.max;
+        const excessRate = implicitUnit * 1.3;
         const excessVolume = volume - tier.max;
-        const excessCost = excessVolume * tier.excess;
+        const excessCost = excessVolume * excessRate;
         total += excessCost;
-        explanation += ` + Excedente (${excessVolume.toLocaleString('pt-BR')} un. × ${formatCurrency(tier.excess)} = ${formatCurrency(excessCost)})`;
+        explanation += ` + Excedente (${excessVolume.toLocaleString('pt-BR')} un. × R$ ${formatUnit(excessRate)} = ${formatCurrency(excessCost)})`;
       }
 
       return (
@@ -559,21 +676,207 @@ function PricingSimulator({ model }: { model: 'cascata' | 'serrote' | 'block' })
         </div>
       );
     }
+
+    if (model === 'license') {
+      const unitPrice = solutionCost / (1 - (ebitdaMargin + taxRate) / 100);
+      const total = volume * unitPrice;
+      const explanation = `Custo: ${formatCurrency(solutionCost)} | Impostos: ${taxRate}% | Margem EBITDA: ${ebitdaMargin}% | Preço Unitário: ${formatCurrency(unitPrice)}`;
+
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="p-4 bg-surface border border-border-subtle rounded-xl text-center">
+              <div className="text-xs text-text-secondary mb-1">Custo Solução</div>
+              <div className="text-lg font-bold">{formatCurrency(solutionCost)}</div>
+            </div>
+            <div className="p-4 bg-surface border border-border-subtle rounded-xl text-center">
+              <div className="text-xs text-text-secondary mb-1">Impostos</div>
+              <div className="text-lg font-bold text-rose-500">{taxRate}%</div>
+            </div>
+            <div className="p-4 bg-surface border border-border-subtle rounded-xl text-center">
+              <div className="text-xs text-text-secondary mb-1">Margem EBITDA</div>
+              <div className="text-lg font-bold text-emerald-500">{ebitdaMargin}%</div>
+            </div>
+            <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl text-center">
+              <div className="text-xs text-primary mb-1">Preço Assinatura</div>
+              <div className="text-lg font-bold text-primary">{formatCurrency(unitPrice)}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-xl">
+            <div className="text-sm text-primary mb-1">Receita Mensal Estimada</div>
+            <div className="text-2xl font-bold text-primary mb-2">{formatCurrency(total)}</div>
+            <div className="text-xs text-text-secondary">Cálculo: {volume} licenças × {formatCurrency(unitPrice)}</div>
+          </div>
+        </div>
+      );
+    }
+
+    if (model === 'success_fee') {
+      const recoveredAmount = portfolioValue * (recoveryRate / 100);
+      const totalFee = recoveredAmount * (successFeePercent / 100);
+      const immediateRevenue = totalFee * (1 - installmentMix / 100);
+      const deferredRevenue = totalFee * (installmentMix / 100);
+
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 bg-surface border border-border-subtle rounded-xl text-center">
+              <div className="text-xs text-text-secondary mb-1">Valor Recuperado Esperado</div>
+              <div className="text-lg font-bold text-emerald-500">{formatCurrency(recoveredAmount)}</div>
+            </div>
+            <div className="p-4 bg-surface border border-border-subtle rounded-xl text-center">
+              <div className="text-xs text-text-secondary mb-1">Receita Imediata (Entradas)</div>
+              <div className="text-lg font-bold text-primary">{formatCurrency(immediateRevenue)}</div>
+            </div>
+            <div className="p-4 bg-surface border border-border-subtle rounded-xl text-center">
+              <div className="text-xs text-text-secondary mb-1">Receita Diferida (Parcelas)</div>
+              <div className="text-lg font-bold text-indigo-400">{formatCurrency(deferredRevenue)}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-xl">
+            <div className="text-sm text-primary mb-1">Receita Total de Success Fee (BPO)</div>
+            <div className="text-2xl font-bold text-primary mb-2">{formatCurrency(totalFee)}</div>
+            <div className="text-xs text-text-secondary">
+              Cálculo: {formatCurrency(portfolioValue)} (Carteira) × {recoveryRate}% (Conversão) × {successFeePercent}% (Taxa)
+            </div>
+          </div>
+        </div>
+      );
+    }
   };
 
   return (
     <div className="mt-6 space-y-4">
       <div className="flex flex-col sm:flex-row gap-4 items-end">
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-text-secondary mb-1">Volume Simulado</label>
-          <input
-            type="number"
-            min="0"
-            value={volume}
-            onChange={(e) => setVolume(Number(e.target.value))}
-            className="w-full bg-surface border border-border-subtle rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
-          />
-        </div>
+        {model !== 'success_fee' ? (
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              {model === 'license' ? 'Quantidade de Licenças' : 'Volume Simulado'}
+            </label>
+            <input
+              type="text"
+              value={volume.toLocaleString('pt-BR')}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, '');
+                setVolume(val ? parseInt(val) : 0);
+              }}
+              className="w-full bg-surface border border-border-subtle rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
+            />
+          </div>
+        ) : (
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">Valor da Carteira</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm font-medium">R$</span>
+              <input
+                type="text"
+                value={portfolioValue.toLocaleString('pt-BR')}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setPortfolioValue(val ? parseInt(val) : 0);
+                }}
+                className="w-full bg-surface border border-border-subtle rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
+              />
+            </div>
+          </div>
+        )}
+
+        {model === 'success_fee' && (
+          <>
+            <div className="flex-[0.5]">
+              <label className="block text-sm font-medium text-text-secondary mb-1">Eficiência</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={recoveryRate}
+                  onChange={(e) => setRecoveryRate(Number(e.target.value))}
+                  className="w-full bg-surface border border-border-subtle rounded-xl pl-4 pr-8 py-2 text-sm focus:outline-none focus:border-primary transition-colors pr-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm">%</span>
+              </div>
+            </div>
+            <div className="flex-[0.5]">
+              <label className="block text-sm font-medium text-text-secondary mb-1">Fee</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={successFeePercent}
+                  onChange={(e) => setSuccessFeePercent(Number(e.target.value))}
+                  className="w-full bg-surface border border-border-subtle rounded-xl pl-4 pr-8 py-2 text-sm focus:outline-none focus:border-primary transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm">%</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">Mix Parcelado</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={installmentMix}
+                  onChange={(e) => setInstallmentMix(Number(e.target.value))}
+                  className="w-full bg-surface border border-border-subtle rounded-xl pl-4 pr-8 py-2 text-sm focus:outline-none focus:border-primary transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm">%</span>
+              </div>
+            </div>
+          </>
+        )}
+
+        {model === 'license' && (
+          <>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">Custo Solução</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm font-medium">R$</span>
+                <input
+                  type="text"
+                  value={solutionCost.toLocaleString('pt-BR')}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setSolutionCost(val ? parseInt(val) : 0);
+                  }}
+                  className="w-full bg-surface border border-border-subtle rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
+                />
+              </div>
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">Impostos</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={taxRate}
+                  onChange={(e) => setTaxRate(Number(e.target.value))}
+                  className="w-full bg-surface border border-border-subtle rounded-xl pl-4 pr-8 py-2 text-sm focus:outline-none focus:border-primary transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="absolute right-8 top-1/2 -translate-y-1/2 text-text-secondary text-sm">%</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-text-secondary mb-1">Margem EBITDA</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max={99 - taxRate}
+                  value={ebitdaMargin}
+                  onChange={(e) => setEbitdaMargin(Number(e.target.value))}
+                  className="w-full bg-surface border border-border-subtle rounded-xl pl-4 pr-8 py-2 text-sm focus:outline-none focus:border-primary transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="absolute right-8 top-1/2 -translate-y-1/2 text-text-secondary text-sm">%</span>
+              </div>
+            </div>
+          </>
+        )}
         
         {(model === 'cascata' || model === 'serrote') && (
           <div className="flex items-center h-10">
@@ -607,16 +910,18 @@ function PricingSimulator({ model }: { model: 'cascata' | 'serrote' | 'block' })
 
       {renderSimulationResult()}
 
-      <div className="overflow-x-auto mt-4 border border-border-subtle rounded-xl">
+      {(model !== 'license' && model !== 'success_fee') && (
+        <div className="overflow-x-auto mt-4 border border-border-subtle rounded-xl">
         <table className="w-full text-sm text-left">
           <thead className="text-xs text-text-secondary uppercase bg-surface border-b border-border-subtle">
             <tr>
               <th className="px-4 py-3 font-medium">Faixa</th>
               <th className="px-4 py-3 font-medium text-right">Faixa Inicial</th>
               <th className="px-4 py-3 font-medium text-right">Faixa Final</th>
-              <th className="px-4 py-3 font-medium text-right">($) Valor Franquia</th>
-              <th className="px-4 py-3 font-medium text-right">($) Unitário</th>
-              <th className="px-4 py-3 font-medium text-right">($) Unitário Excedente</th>
+              <th className="px-4 py-3 font-medium text-right">($) Valor Franquia Mínima</th>
+              {model !== 'cascata' && model !== 'block' && <th className="px-4 py-3 font-medium text-right">($) Receita Total Faixa</th>}
+              {model !== 'block' && <th className="px-4 py-3 font-medium text-right">($) Unitário</th>}
+              {model !== 'cascata' && <th className="px-4 py-3 font-medium text-right">($) Excedente</th>}
             </tr>
           </thead>
           <tbody>
@@ -640,23 +945,76 @@ function PricingSimulator({ model }: { model: 'cascata' | 'serrote' | 'block' })
                   <td className="px-4 py-2 font-medium">Faixa {t.id}</td>
                   <td className="px-4 py-2 text-right">{t.min.toLocaleString('pt-BR')}</td>
                   <td className="px-4 py-2 text-right">{t.max.toLocaleString('pt-BR')}</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(t.franchise)}</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(t.unit)}</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(t.excess)}</td>
+                  <td className="px-4 py-2 text-right">
+                    {model === 'cascata' 
+                      ? formatCurrency(t.id === 1 
+                          ? t.unit * t.max 
+                          : pricingTiers.slice(0, pricingTiers.indexOf(t)).reduce((acc, prev, idx) => {
+                              const prevMaxLimit = idx === 0 ? 0 : pricingTiers[idx-1].max;
+                              const capacity = prev.max - prevMaxLimit;
+                              return acc + (capacity * prev.unit);
+                            }, 0))
+                      : model === 'block'
+                        ? (
+                            <div>
+                               {formatCurrency(t.franchise)}
+                               <div className="text-[10px] text-text-secondary opacity-70">
+                                 (R$ {formatUnit(t.franchise / t.max)} por un.)
+                               </div>
+                            </div>
+                          )
+                        : (function getSerroteFranchise(tId: number): string {
+                          const getTierTotal = (id: number): number => {
+                            const currentT = pricingTiers.find(p => p.id === id)!;
+                            if (currentT.id === 1) return currentT.unit * currentT.max;
+                            const prevTotal = getTierTotal(currentT.id - 1);
+                            const prevMax = pricingTiers.find(p => p.id === currentT.id - 1)!.max;
+                            return prevTotal + (currentT.max - prevMax) * currentT.excess;
+                          };
+                          
+                          if (tId === 1) return formatCurrency(pricingTiers[0].unit * pricingTiers[0].max);
+                          return formatCurrency(getTierTotal(tId - 1));
+                        })(t.id)}
+                  </td>
+                  {model !== 'cascata' && model !== 'block' && (
+                    <td className="px-4 py-2 text-right">
+                      {(function getSerroteTotal(tId: number): string {
+                          const getTierTotal = (id: number): number => {
+                            const currentT = pricingTiers.find(p => p.id === id)!;
+                            if (currentT.id === 1) return currentT.unit * currentT.max;
+                            const prevTotal = getTierTotal(currentT.id - 1);
+                            const prevMax = pricingTiers.find(p => p.id === currentT.id - 1)!.max;
+                            return prevTotal + (currentT.max - prevMax) * currentT.excess;
+                          };
+                          return formatCurrency(getTierTotal(tId));
+                        })(t.id)}
+                    </td>
+                  )}
+                  {model !== 'block' && (
+                    <td className="px-4 py-2 text-right text-text-secondary">
+                      R$ {formatUnit(t.unit)}
+                    </td>
+                  )}
+                  {model !== 'cascata' && (
+                    <td className="px-4 py-2 text-right text-text-secondary">
+                      R$ {formatUnit(model === 'block' ? (t.franchise / t.max) * 1.3 : t.excess)}
+                    </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
 
 function PricingModelsManager() {
-  const [expandedModel, setExpandedModel] = useState<'cascata' | 'serrote' | 'block' | null>(null);
+  const [expandedModel, setExpandedModel] = useState<'cascata' | 'serrote' | 'block' | 'license' | 'success_fee' | null>(null);
 
-  const toggleModel = (model: 'cascata' | 'serrote' | 'block') => {
+  const toggleModel = (model: 'cascata' | 'serrote' | 'block' | 'license' | 'success_fee') => {
     setExpandedModel(prev => prev === model ? null : model);
   };
 
@@ -667,7 +1025,7 @@ function PricingModelsManager() {
         <p className="text-text-secondary text-sm">Selecione um modelo para ver os conceitos, comportamentos e o simulador.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Cascata Card */}
         <button 
           onClick={() => toggleModel('cascata')}
@@ -721,6 +1079,42 @@ function PricingModelsManager() {
           </div>
           <p className="text-xs text-text-secondary line-clamp-2">Valor fixo por um pacote de volume, com valor adicional por unidade excedente.</p>
         </button>
+
+        {/* License Card */}
+        <button 
+          onClick={() => toggleModel('license')}
+          className={`p-4 text-left border rounded-2xl transition-all ${
+            expandedModel === 'license' 
+              ? 'bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]' 
+              : 'bg-element-bg border-border-subtle hover:border-amber-500/30 hover:bg-amber-500/5'
+          }`}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${expandedModel === 'license' ? 'bg-amber-500 text-white' : 'bg-amber-500/10 text-amber-500'}`}>
+              <Table className="w-5 h-5" />
+            </div>
+            <h4 className={`text-lg font-bold ${expandedModel === 'license' ? 'text-amber-500' : 'text-text-primary'}`}>Licença de Uso</h4>
+          </div>
+          <p className="text-xs text-text-secondary line-clamp-2">Custo fixo mensal por licença, estabelecido com margem EBITDA sobre o custo da solução.</p>
+        </button>
+
+        {/* Success Fee Card */}
+        <button 
+          onClick={() => toggleModel('success_fee')}
+          className={`p-4 text-left border rounded-2xl transition-all ${
+            expandedModel === 'success_fee' 
+              ? 'bg-indigo-500/10 border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.1)]' 
+              : 'bg-element-bg border-border-subtle hover:border-indigo-500/30 hover:bg-indigo-500/5'
+          }`}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${expandedModel === 'success_fee' ? 'bg-indigo-500 text-white' : 'bg-indigo-500/10 text-indigo-500'}`}>
+              <Table className="w-5 h-5" />
+            </div>
+            <h4 className={`text-lg font-bold ${expandedModel === 'success_fee' ? 'text-indigo-500' : 'text-text-primary'}`}>Success Fee</h4>
+          </div>
+          <p className="text-xs text-text-secondary line-clamp-2">Remuneração baseada no sucesso da recuperação de ativos. Percentuais variáveis por aging.</p>
+        </button>
       </div>
 
       <AnimatePresence mode="wait">
@@ -768,7 +1162,7 @@ function PricingModelsManager() {
               </div>
               <div className="space-y-4 text-sm text-text-secondary">
                 <p>
-                  <strong className="text-text-primary">Conceito:</strong> No modelo Serrote, a franquia mínima sempre é sobre o volume da faixa inicial, só na primeira faixa que a regra é para o final da faixa. Se o usuário exceder a quantidade da faixa inicial, o sistema calcula o excedente e multiplica pelo valor unitário excedente.
+                  <strong className="text-text-primary">Conceito:</strong> No modelo Serrote, se houver franquia mínima, ela é o custo total acumulado até a faixa anterior. O volume que ultrapassa o limite da faixa anterior (excedente) é cobrado pelo Valor Unitário Excedente da faixa atingida. Sem franquia, aplica-se o Unitário a todas as unidades.
                 </p>
                 <div className="p-4 bg-surface rounded-xl border border-border-subtle">
                   <strong className="text-text-primary block mb-2">Simulador Serrote:</strong>
@@ -805,6 +1199,64 @@ function PricingModelsManager() {
                 </div>
                 <p>
                   <strong className="text-text-primary">Franquia:</strong> Por definição, o valor do bloco já atua como uma <strong>franquia mínima</strong> (o cliente paga o valor do bloco mesmo se usar zero unidades). No entanto, a estrutura de blocos adicionais ou excedentes pode variar.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {expandedModel === 'license' && (
+          <motion.div
+            key="license"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-6 bg-element-bg border border-amber-500/20 rounded-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-xl font-bold text-amber-500">Licença de Uso (Mensalidade)</h4>
+                <button onClick={() => setExpandedModel(null)} className="p-2 hover:bg-surface rounded-lg text-text-secondary"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="space-y-4 text-sm text-text-secondary">
+                <p>
+                  <strong className="text-text-primary">Conceito:</strong> Este modelo é utilizado para soluções SaaS ou softwares de prateleira onde se paga um valor fixo mensal. O preço de venda é definido aplicando-se uma <strong>Margem EBITDA</strong> sobre o custo de aquisição da solução.
+                </p>
+                <div className="p-4 bg-surface rounded-xl border border-border-subtle">
+                  <strong className="text-text-primary block mb-2">Simulador de Licenciamento:</strong>
+                  <PricingSimulator model="license" />
+                </div>
+                <p>
+                  <strong className="text-text-primary">EBITDA:</strong> O cálculo utiliza a fórmula de margem sobre receita, considerando também a incidência de impostos: <code>Preço = Custo / (1 - (Margem% + Impostos%))</code>. Isso garante que a rentabilidade desejada seja preservada após o pagamento de tributos.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {expandedModel === 'success_fee' && (
+          <motion.div
+            key="success_fee"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-6 bg-element-bg border border-indigo-500/20 rounded-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-xl font-bold text-indigo-500">Recuperação de Crédito (Success Fee)</h4>
+                <button onClick={() => setExpandedModel(null)} className="p-2 hover:bg-surface rounded-lg text-text-secondary"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="space-y-4 text-sm text-text-secondary">
+                <p>
+                  <strong className="text-text-primary">Conceito:</strong> Modelo focado em performance (BPO de Cobrança). A remuneração é um percentual sobre o valor efetivamente recuperado de uma carteira de inadimplentes. O Success Fee geralmente escala conforme o <strong>Aging</strong> (idade) da dívida.
+                </p>
+                <div className="p-4 bg-surface rounded-xl border border-border-subtle">
+                  <strong className="text-text-primary block mb-2">Simulador de Recuperação:</strong>
+                  <PricingSimulator model="success_fee" />
+                </div>
+                <p>
+                  <strong className="text-text-primary">Parcelamento:</strong> Para acordos parcelados, a regra padrão cobra o fee sobre a entrada e, subsequentemente, sobre cada parcela paga. O simulador acima projeta a receita imediata vs. diferida com base no mix de acordos.
                 </p>
               </div>
             </div>

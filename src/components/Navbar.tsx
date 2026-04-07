@@ -11,14 +11,13 @@ export function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-panel border-b border-border-subtle">
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center glow-primary">
-            <BrainCircuit className="w-6 h-6 text-white" />
-          </div>
-          <span className="font-display font-bold text-xl tracking-tight">
-            Auto Raio X <span className="text-blue-500">Empresarial</span>
-          </span>
-        </div>
+        <Link to="/" className="flex items-center">
+          <img 
+            src="/logo.png" 
+            alt="Auto Raio X" 
+            className={`h-12 w-auto transition-all ${theme === 'dark' ? 'brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]' : ''}`}
+          />
+        </Link>
 
         <div className="hidden md:flex items-center gap-8">
           <a href="#solucoes" className="text-sm text-text-secondary hover:text-text-primary transition-colors">Soluções</a>

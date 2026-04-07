@@ -3,8 +3,10 @@ import { motion } from 'motion/react';
 import { BrainCircuit, ArrowRight, Mail, Lock, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../components/ThemeProvider';
 
 export function Login() {
+  const { theme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -54,10 +56,12 @@ export function Login() {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500" />
 
           <div className="flex justify-center mb-8">
-            <Link to="/" className="flex items-center gap-2 group">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center glow-primary transition-transform group-hover:scale-105">
-                <BrainCircuit className="w-7 h-7 text-white" />
-              </div>
+            <Link to="/" className="group">
+              <img 
+                src="/logo.png" 
+                alt="Auto Raio X" 
+                className={`h-16 w-auto transition-all group-hover:scale-105 ${theme === 'dark' ? 'brightness-110 drop-shadow-[0_0_12px_rgba(255,255,255,0.25)]' : ''}`}
+              />
             </Link>
           </div>
 

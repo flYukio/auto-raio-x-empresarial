@@ -1,19 +1,19 @@
-import React from 'react';
-import { BrainCircuit } from 'lucide-react';
+import { useTheme } from './ThemeProvider';
 
 export function Footer() {
+  const { theme } = useTheme();
+
   return (
     <footer className="border-t border-border-subtle bg-surface/50 pt-20 pb-10">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10 mb-16">
           <div className="col-span-2 lg:col-span-2">
-            <div className="flex items-center gap-2 mb-6">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                <BrainCircuit className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-display font-bold text-lg tracking-tight">
-                Auto Raio X <span className="text-blue-400">Empresarial</span>
-              </span>
+            <div className="flex items-center mb-6">
+              <img 
+                src="/logo.png" 
+                alt="Auto Raio X" 
+                className={`h-10 w-auto transition-all ${theme === 'dark' ? 'brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]' : ''}`}
+              />
             </div>
             <p className="text-text-secondary text-sm max-w-xs leading-relaxed">
               A plataforma definitiva para simulação e inteligência de decisão financeira corporativa.
