@@ -688,7 +688,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                         });
 
                         return Object.entries(groups).map(([area, resources]) => {
-                          const isExpanded = expandedAreas[area] !== false; // default to expanded
+                          const isExpanded = expandedAreas[area] === true; // default to collapsed
                           const areaTotalHC = resources.reduce((sum, r) => sum + (r.qty * ((r.allocation || 100) / 100)), 0);
                           
                           // Correctly calculate total area cost based on each role's faixa-based salary
