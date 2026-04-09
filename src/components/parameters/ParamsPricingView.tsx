@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Briefcase, FileText, Plus, Edit2, Trash2, X, Save, Loader2, Search, ChevronUp, ChevronDown, Power, PowerOff, Table } from 'lucide-react';
+import { Briefcase, FileText, Plus, Edit2, Trash2, X, Save, Loader2, Search, ChevronUp, ChevronDown, Power, PowerOff, Table, Server } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface PricingRole {
@@ -1267,8 +1267,238 @@ function PricingModelsManager() {
   );
 }
 
+interface InfraItem {
+  id: string;
+  name: string;
+  type: string;
+  unit_cost: number;
+  active: boolean;
+}
+
+function InfraItemsManager() {
+  const [items, setItems] = useState<InfraItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InfraItem | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [name, setName] = useState('');
+  const [type, setType] = useState('shared_fixed');
+  const [unitCost, setUnitCost] = useState<number | ''>('');
+  const [isActive, setIsActive] = useState(true);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const fetchItems = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('infra_items')
+        .select('*')
+        .order('name', { ascending: true });
+      if (error) throw error;
+      setItems(data || []);
+    } catch (err) {
+      console.error('Erro ao buscar itens de infra:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenModal = (item?: InfraItem) => {
+    if (item) {
+      setEditingItem(item);
+      setName(item.name);
+      setType(item.type);
+      setUnitCost(item.unit_cost);
+      setIsActive(item.active);
+    } else {
+      setEditingItem(null);
+      setName('');
+      setType('shared_fixed');
+      setUnitCost('');
+      setIsActive(true);
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingItem(null);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || unitCost === '') return;
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        name,
+        type,
+        unit_cost: Number(unitCost),
+        active: isActive
+      };
+
+      if (editingItem) {
+        const { error } = await supabase.from('infra_items').update(payload).eq('id', editingItem.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('infra_items').insert([payload]);
+        if (error) throw error;
+      }
+
+      await fetchItems();
+      handleCloseModal();
+    } catch (err) {
+      console.error('Erro ao salvar item de infra:', err);
+      alert('Erro ao salvar. Verifique o banco.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const toggleActiveStatus = async (item: InfraItem) => {
+    try {
+      const { error } = await supabase.from('infra_items').update({ active: !item.active }).eq('id', item.id);
+      if (error) throw error;
+      await fetchItems();
+    } catch (err) {
+      console.error('Erro ao alterar status:', err);
+    }
+  };
+
+  const filteredItems = React.useMemo(() => {
+    let result = [...items];
+    if (!showInactive) result = result.filter(i => i.active !== false);
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      result = result.filter(i => i.name.toLowerCase().includes(lower) || i.type.toLowerCase().includes(lower));
+    }
+    return result;
+  }, [items, searchTerm, showInactive]);
+
+  const typeLabels: Record<string, string> = {
+    'shared_fixed': 'Compartilhado (Rateio %)',
+    'variable_api': 'Transacional (Chamada)',
+    'batch_instance': 'Fixo (Batch/Mes)',
+    'storage_acumulativo': 'Data/Storage Acum.'
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h3 className="text-lg font-bold">Itens de Infraestrutura</h3>
+          <p className="text-text-secondary text-sm">Dicionário de custos de nuvem e ferramentas API.</p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+          <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer hover:text-text-primary transition-colors">
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded border-border-subtle bg-element-bg text-primary focus:ring-primary" />
+            Mostrar inativos
+          </label>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+            <input type="text" placeholder="Buscar por nome..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-element-bg border border-border-subtle rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-primary transition-colors" />
+          </div>
+          <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-blue-600 transition-colors flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Novo Item
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-text-secondary uppercase bg-element-bg border-b border-border-subtle">
+              <tr>
+                <th className="px-4 py-3 font-medium">Nome do Item</th>
+                <th className="px-4 py-3 font-medium">Natureza</th>
+                <th className="px-4 py-3 font-medium text-right">Custo Unitário Recomendado</th>
+                <th className="px-4 py-3 font-medium text-center">Status</th>
+                <th className="px-4 py-3 font-medium text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-text-secondary">Nenhum item encontrado.</td></tr>
+              ) : (
+                filteredItems.map(item => (
+                  <tr key={item.id} className={`border-b border-border-subtle hover:bg-element-hover/50 ${!item.active ? 'opacity-50' : ''}`}>
+                    <td className="px-4 py-3 font-bold">{item.name}</td>
+                    <td className="px-4 py-3 font-medium text-text-secondary">{typeLabels[item.type] || item.type}</td>
+                    <td className="px-4 py-3 text-right text-primary font-mono font-bold">
+                      {item.unit_cost.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4, style: 'currency', currency: 'BRL' })}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${item.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                        {item.active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => handleOpenModal(item)} className="p-1.5 text-text-secondary hover:text-primary hover:bg-primary/10 rounded-lg"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => toggleActiveStatus(item)} className={`p-1.5 rounded-lg ${item.active ? 'text-text-secondary hover:text-rose-500 hover:bg-rose-500/10' : 'text-text-secondary hover:text-emerald-500 hover:bg-emerald-500/10'}`}>
+                          {item.active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface border border-border-subtle rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-border-subtle">
+              <h3 className="text-lg font-bold">{editingItem ? 'Editar Item' : 'Novo Item'}</h3>
+              <button onClick={handleCloseModal} className="text-text-secondary hover:text-text-primary"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSave} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Nome do Item</label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full bg-element-bg border border-border-subtle rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Natureza</label>
+                <select value={type} onChange={(e) => setType(e.target.value)} className="w-full bg-element-bg border border-border-subtle rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary">
+                  <option value="shared_fixed">Compartilhado (Rateio %)</option>
+                  <option value="variable_api">Transacional (Chamada)</option>
+                  <option value="batch_instance">Fixo (Batch/Mes)</option>
+                  <option value="storage_acumulativo">Data/Storage Acumulativo</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Custo Unitário</label>
+                <input type="number" step="any" min="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value ? Number(e.target.value) : '')} required className="w-full bg-element-bg border border-border-subtle rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary" />
+              </div>
+              <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-border-subtle">
+                <button type="button" onClick={handleCloseModal} className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary">Cancelar</button>
+                <button type="submit" disabled={isSaving} className="px-6 py-2 bg-primary text-white rounded-xl text-sm font-medium flex items-center gap-2">
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ParamsPricingView({ userPermissions }: { userPermissions: string[] }) {
-  const [activeTab, setActiveTab] = useState<'cargos' | 'dafs' | 'modelos'>('cargos');
+  const [activeTab, setActiveTab] = useState<'cargos' | 'dafs' | 'modelos' | 'infra'>('cargos');
 
   if (!userPermissions.includes('Parâmetros - Pricing')) {
     return <div className="p-8 text-center text-rose-400">Acesso negado.</div>;
@@ -1307,6 +1537,16 @@ export function ParamsPricingView({ userPermissions }: { userPermissions: string
         >
           <Table className="w-4 h-4" /> Modelos de Tabelas
         </button>
+        <button
+          onClick={() => setActiveTab('infra')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'infra' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-subtle'
+          }`}
+        >
+          <Server className="w-4 h-4" /> Itens de Infra
+        </button>
       </div>
 
       <motion.div
@@ -1319,6 +1559,8 @@ export function ParamsPricingView({ userPermissions }: { userPermissions: string
           <PricingRolesManager />
         ) : activeTab === 'modelos' ? (
           <PricingModelsManager />
+        ) : activeTab === 'infra' ? (
+          <InfraItemsManager />
         ) : (
           <div>
             <h3 className="text-lg font-bold mb-4">Cadastro de DAF's</h3>

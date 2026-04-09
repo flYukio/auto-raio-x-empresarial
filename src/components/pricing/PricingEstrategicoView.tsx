@@ -8,6 +8,7 @@ import {
   FileText,
   DollarSign,
   BarChart3,
+  Search,
   TrendingUp,
   Briefcase,
   Package,
@@ -33,10 +34,9 @@ interface PricingEstrategicoViewProps {
 }
 
 export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoViewProps) {
-  const [view, setView] = useState<'overview' | 'new-bc' | 'monthly-details'>('overview');
+  const [view, setView] = useState<'overview' | 'new-bc' | 'monthly-details' | 'infra-details'>('overview');
   const [activeStep, setActiveStep] = useState<number>(1);
   const [activeTierModal, setActiveTierModal] = useState<string | null>(null);
-  // Centralized state for Business Case data
   const [bcData, setBcData] = useState({
     id: '' as string,
     sku: '',
@@ -49,6 +49,11 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     avgVolume: 0,
     contractMonths: 12,
     resources: [] as any[],
+    infrastructure: {
+      cloudBuffer: 0,
+      envMultiplier: 1.0,
+      items: [] as any[]
+    },
     volumeStrategy: {
       type: 'ramp' as 'ramp' | 'manual',
       rampUpMonths: 0,
@@ -72,6 +77,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     }
   });
   const [availableRoles, setAvailableRoles] = useState<any[]>([]);
+  const [availableInfraItems, setAvailableInfraItems] = useState<any[]>([]);
   const [inflationIndices, setInflationIndices] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -80,6 +86,18 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
   const [tempArea, setTempArea] = useState<string>('Sustentação');
   const [tempCustomArea, setTempCustomArea] = useState<string>('');
   const [tempRoleId, setTempRoleId] = useState<string>('');
+  
+  // Selection state for Step 4 (Infraestrutura)
+  const [tempInfraItem, setTempInfraItem] = useState({
+    name: '',
+    type: 'shared_fixed' as 'shared_fixed' | 'variable_api' | 'batch_instance' | 'storage_acumulativo',
+    cost: '', // string for raw input handling before parsing
+    premise: '', // represents allocation pct, or qty per client, or mb per client
+  });
+  
+  const [isInfraCatalogOpen, setIsInfraCatalogOpen] = useState(false);
+  const [infraCatalogSearch, setInfraCatalogSearch] = useState('');
+
   const [lastSavedData, setLastSavedData] = useState<string>('');
 
   const [allBusinessCases, setAllBusinessCases] = useState<any[]>([]);
@@ -106,8 +124,10 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     setIsLoading(true);
     const { data: roles } = await supabase.from('pricing_roles').select('*').eq('active', true);
     const { data: indices } = await supabase.from('inflation_indices').select('*').order('year', { ascending: true });
+    const { data: infraItems } = await supabase.from('infra_items').select('*').eq('active', true).order('name', { ascending: true });
     if (roles) setAvailableRoles(roles);
     if (indices) setInflationIndices(indices);
+    if (infraItems) setAvailableInfraItems(infraItems);
     await fetchBusinessCases();
     setIsLoading(false);
   };
@@ -360,6 +380,19 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                   { id: 't3', name: 'Small Business (Pequenas)', initialCount: 5, finalCount: 40, avgVolume: 1500 }
                 ],
                 monthlyOverrides: {}
+              },
+              taxModel: {
+                regime: 'lucro_presumido',
+                estadoSede: 'SP',
+                issRate: 5.0,
+                pisCofinsRate: 8.65,
+                reformaTributariaAtiva: false,
+                reformaIbsCbsRate: 26.5
+              },
+              infrastructure: {
+                cloudBuffer: 0,
+                envMultiplier: 1.0,
+                items: []
               }
             });
             setActiveStep(1);
@@ -450,6 +483,19 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                       { id: 't3', name: 'Small Business (Pequenas)', initialCount: 5, finalCount: 40, avgVolume: 1500 }
                     ],
                     monthlyOverrides: {}
+                  },
+                  taxModel: {
+                    regime: 'lucro_presumido',
+                    estadoSede: 'SP',
+                    issRate: 5.0,
+                    pisCofinsRate: 8.65,
+                    reformaTributariaAtiva: false,
+                    reformaIbsCbsRate: 26.5
+                  },
+                  infrastructure: {
+                    cloudBuffer: 0,
+                    envMultiplier: 1.0,
+                    items: []
                   }
                 });
                 setActiveStep(1);
@@ -529,6 +575,19 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                     { id: 't3', name: 'Small Business (Pequenas)', initialCount: 5, finalCount: 40, avgVolume: 1500 }
                                   ],
                                   monthlyOverrides: {}
+                                },
+                                taxModel: bc.tax_model || {
+                                  regime: 'lucro_presumido',
+                                  estadoSede: 'SP',
+                                  issRate: 5.0,
+                                  pisCofinsRate: 8.65,
+                                  reformaTributariaAtiva: false,
+                                  reformaIbsCbsRate: 26.5
+                                },
+                                infrastructure: bc.infrastructure || {
+                                  cloudBuffer: 0,
+                                  envMultiplier: 1.0,
+                                  items: []
                                 }
                               });
                               setActiveStep(1);
@@ -899,15 +958,15 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                           <th className="pb-2 text-center w-20">Nº Início</th>
                           <th className="pb-2 text-center w-20">Nº Fim</th>
                           <th className="pb-2 text-right w-24">Vol/Mês</th>
-                          <th className="pb-2 text-right w-16">% Vol</th>
+                          <th className="pb-2 text-right w-16">% Mix</th>
                           <th className="pb-2 w-8"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {(() => {
-                          const totalFinalVolume = Math.max(1, (bcData.volumeStrategy?.tiers || []).reduce((acc: any, t: any) => acc + (t.finalCount * t.avgVolume), 0));
+                          const totalFinalClients = Math.max(1, (bcData.volumeStrategy?.tiers || []).reduce((acc: any, t: any) => acc + t.finalCount, 0));
                           return (bcData.volumeStrategy?.tiers || []).map((tier: any, idx: number) => {
-                            const pct = ((tier.finalCount * tier.avgVolume) / totalFinalVolume * 100).toFixed(1);
+                            const pct = ((tier.finalCount) / totalFinalClients * 100).toFixed(1);
                             return (
                               <tr key={tier.id} className="border-b border-border-subtle/50 hover:bg-element-hover/30 transition-colors group">
                                 <td className="py-2 pr-2">
@@ -1399,6 +1458,12 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                           <span className="text-[8px] font-bold uppercase tracking-tighter">Erro de Prazo</span>
                                        </div>
                                     )}
+                                    {resources.some(r => (r.end_month || bcData.contractMonths) < bcData.contractMonths) && (
+                                       <div className="flex items-center gap-1 bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded border border-amber-500/20" title="Existem recursos com rampa encerrada antes do fim do contrato nesta área">
+                                          <AlertCircle className="w-2.5 h-2.5" />
+                                          <span className="text-[8px] font-bold uppercase tracking-tighter">Rampa Incompleta</span>
+                                       </div>
+                                    )}
                                   </div>
                                 </td>
                                 <td className="px-2 py-3 text-center">
@@ -1657,12 +1722,347 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
             </div>
           )}
           {activeStep === 4 && (
-            <div>
-              <h3 className="text-lg font-bold mb-4">Infraestrutura (TI)</h3>
-              <p className="text-text-secondary text-sm mb-6">Especifique os custos de infraestrutura e tecnologia.</p>
-              <div className="p-8 border border-border-subtle border-dashed rounded-xl flex items-center justify-center text-text-secondary bg-element-bg/50">
-                Formulário de Infraestrutura em construção...
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold mb-1">Infraestrutura (TI)</h3>
+                  <p className="text-text-secondary text-sm">Controle de OPEX, nuvem e licenças com projeção escalável.</p>
+                </div>
               </div>
+
+              {/* KPIs de Infraestrutura */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                <div className="glass-panel p-4 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col justify-center">
+                  <span className="text-[10px] text-primary uppercase font-bold tracking-widest mb-1">Custo Médio Mensal (TI)</span>
+                  <div className="text-2xl font-display font-bold text-text-primary">
+                    R$ {formatNumber(getDetailedMonthlyTimeline().reduce((acc, m) => acc + m.totalItMonth, 0) / Math.max(1, bcData.contractMonths))}
+                  </div>
+                </div>
+                <div className="glass-panel p-4 rounded-2xl border border-border-subtle bg-element-bg/30 flex flex-col justify-center">
+                  <span className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">Total LTV (TI)</span>
+                  <div className="text-xl font-display font-bold text-text-primary">
+                    R$ {formatNumber(getDetailedMonthlyTimeline().reduce((acc, m) => acc + m.totalItMonth, 0))}
+                  </div>
+                </div>
+                <div className="glass-panel p-4 rounded-2xl border border-border-subtle bg-element-bg/30 flex flex-col justify-center">
+                  <span className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">Custo Fim de Contrato (Pico)</span>
+                  <div className="text-xl font-display font-bold text-amber-500">
+                    R$ {formatNumber(getDetailedMonthlyTimeline().slice(-1)[0]?.totalItMonth || 0)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabela Resumo Anual Infra */}
+              {bcData.infrastructure?.items && bcData.infrastructure.items.length > 0 && (
+                <div className="glass-panel p-5 rounded-2xl border border-border-subtle bg-element-bg/50">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-4 flex items-center gap-2">
+                    <Cloud className="w-4 h-4" /> Evolução Anual do Custo Mensal (Cloud)
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {(() => {
+                      const timeline = getDetailedMonthlyTimeline();
+                      const years: Record<string, { total: number, months: number }> = {};
+                      timeline.forEach(m => {
+                         const yyyy = m.dateLabel.split('/')[1];
+                         if (!years[yyyy]) years[yyyy] = { total: 0, months: 0 };
+                         years[yyyy].total += m.totalItMonth;
+                         years[yyyy].months += 1;
+                      });
+                      return Object.entries(years).map(([year, data]) => (
+                        <div key={year} className="bg-surface border border-border-subtle rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden group hover:border-primary/50 transition-colors">
+                          <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+                          <span className="text-[10px] font-bold text-text-secondary">Ano {year}</span>
+                          <div className="flex justify-between items-end mt-1">
+                            <div>
+                              <span className="text-[9px] text-text-secondary block">Média Mensal</span>
+                              <span className="font-bold text-primary text-sm">R$ {formatNumber(data.total / data.months)}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[9px] text-text-secondary block">Acumulado</span>
+                              <span className="font-bold text-amber-500 text-xs">R$ {formatNumber(data.total)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                  
+                  <button
+                    onClick={() => setView('infra-details')}
+                    className="w-full mt-4 py-2 border border-border-subtle rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-element-hover transition-colors flex items-center justify-center gap-2"
+                  >
+                    <FileSpreadsheet className="w-3 h-3" /> Ver Detalhamento Mensal de Infraestrutura
+                  </button>
+                </div>
+              )}
+
+              {/* FinOps Controls */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="glass-panel p-5 rounded-2xl border border-primary/20 bg-primary/5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Cloud className="w-5 h-5 text-primary" />
+                    <h4 className="text-sm font-bold text-text-primary">Controles Cloud (FinOps)</h4>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-bold text-text-secondary">Safety Buffer (Contingência)</label>
+                        <span className="text-xs font-bold tabular-nums text-rose-500">+{bcData.infrastructure?.cloudBuffer || 0}%</span>
+                      </div>
+                      <input
+                        type="range" min="0" max="50" step="5"
+                        value={bcData.infrastructure?.cloudBuffer || 0}
+                        onChange={(e) => setBcData({ ...bcData, infrastructure: { ...(bcData.infrastructure || {}), cloudBuffer: parseInt(e.target.value) } as any })}
+                        className="w-full accent-rose-500"
+                      />
+                      <p className="text-[9px] text-text-secondary mt-1">Margem de segurança para variação de tráfego, egress AWS e imprevisibilidades.</p>
+                    </div>
+                    <div className="border-t border-primary/10 pt-3">
+                      <label className="text-xs font-bold text-text-secondary mb-2 block">Multiplicador de Ambientes (DEV/QA/PRD)</label>
+                      <select 
+                        value={bcData.infrastructure?.envMultiplier || 1.0}
+                        onChange={(e) => setBcData({ ...bcData, infrastructure: { ...(bcData.infrastructure || {}), envMultiplier: parseFloat(e.target.value) } as any })}
+                        className="w-full bg-element-bg border border-border-subtle rounded-xl px-3 py-2 text-[12px] font-bold focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                      >
+                        <option value={1.0}>Apenas Produção (1.0x)</option>
+                        <option value={1.2}>PRD + Homologação Simples (1.2x)</option>
+                        <option value={1.5}>PRD + Homologação + DEV (1.5x)</option>
+                        <option value={2.0}>Espelho Completo (2.0x)</option>
+                      </select>
+                      <p className="text-[9px] text-text-secondary mt-1">Aplica-se apenas em itens transacionais, storage e processos. Licenças de rateio ignoram este fator.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form to add item */}
+                <div className="glass-panel p-5 rounded-2xl border border-border-subtle bg-element-bg/30 flex flex-col gap-3">
+                  <h4 className="text-sm font-bold text-text-primary mb-1 flex items-center gap-2"><Server className="w-5 h-5" /> Adicionar Recurso (OpEx)</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                     <div className="col-span-2">
+                      <label className="block text-[10px] text-text-secondary uppercase font-bold mb-1 ml-1">Nome do Item</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          value={tempInfraItem.name} 
+                          onChange={(e) => setTempInfraItem({ ...tempInfraItem, name: e.target.value })} 
+                          placeholder="Digite ou selecione no Catálogo..." 
+                          className="flex-1 bg-element-bg border border-border-subtle rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary" 
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => setIsInfraCatalogOpen(true)}
+                          className="px-3 bg-element-bg text-text-secondary font-bold text-[10px] uppercase tracking-wider border border-border-subtle rounded-xl hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors flex items-center gap-1"
+                        >
+                          <Search className="w-3 h-3" /> Catálogo
+                        </button>
+                      </div>
+                     </div>
+                     <div className="col-span-2">
+                       <label className="block text-[10px] text-text-secondary uppercase font-bold mb-1 ml-1">Natureza do Custo</label>
+                       <select value={tempInfraItem.type} onChange={(e) => {
+                          const newType = e.target.value as any;
+                          setTempInfraItem({ ...tempInfraItem, type: newType, premise: newType === 'variable_api' ? '1' : '' });
+                       }} className="w-full bg-element-bg border border-border-subtle rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:border-primary cursor-pointer">
+                         <option value="shared_fixed">Compartilhado (Rateio %)</option>
+                         <option value="variable_api">Transacional (Chamada)</option>
+                         <option value="batch_instance">Fixo Dedicado Mensal (Instância/Batch)</option>
+                         <option value="storage_acumulativo">Armazenamento Acumulativo (Storage/DB Mensal)</option>
+                       </select>
+                     </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-element-bg border border-border-subtle rounded-xl mt-1">
+                    {tempInfraItem.type === 'shared_fixed' && (
+                      <>
+                        <div>
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Custo Mensal Total (R$)</label>
+                          <input type="text" placeholder="100000" value={tempInfraItem.cost} onChange={(e) => setTempInfraItem({ ...tempInfraItem, cost: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">% de Rateio p/ BC</label>
+                          <input type="number" min="0" max="100" placeholder="10" value={tempInfraItem.premise} onChange={(e) => setTempInfraItem({ ...tempInfraItem, premise: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div className="col-span-2 text-[9px] text-text-secondary leading-tight mt-1">O valor será multiplicado pelo percentual para deduzir o custo alocado a este produto no mês.</div>
+                      </>
+                    )}
+                    {tempInfraItem.type === 'variable_api' && (
+                      <>
+                        <div>
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Custo Unitário (R$)</label>
+                          <input type="text" placeholder="0.25" value={tempInfraItem.cost} onChange={(e) => setTempInfraItem({ ...tempInfraItem, cost: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Reqs. por Unid. Volume</label>
+                          <input type="number" min="0" placeholder="1" value={tempInfraItem.premise} onChange={(e) => setTempInfraItem({ ...tempInfraItem, premise: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div className="col-span-2 text-[9px] text-text-secondary leading-tight mt-1">Será cruzado com a Projeção de Volume Mensal. Ex: Se a ferramenta projetar 1.000 requisições globais naquele mês com 1 req/volume de infra, gera 1.000 cobranças unitárias.</div>
+                      </>
+                    )}
+                    {tempInfraItem.type === 'batch_instance' && (
+                      <>
+                        <div className="col-span-2">
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Valor Fixo no Mês (R$)</label>
+                          <input type="text" placeholder="2500" value={tempInfraItem.cost} onChange={(e) => setTempInfraItem({ ...tempInfraItem, cost: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div className="col-span-2 text-[9px] text-text-secondary leading-tight mt-1">Custo será lançado integralmente a cada mês independentemente de base de clientes.</div>
+                      </>
+                    )}
+                    {tempInfraItem.type === 'storage_acumulativo' && (
+                      <>
+                        <div>
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Custo por GB (R$)</label>
+                          <input type="text" placeholder="0.12" value={tempInfraItem.cost} onChange={(e) => setTempInfraItem({ ...tempInfraItem, cost: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">GBs Gerados / Volume (Mês)</label>
+                          <input type="number" min="0" step="any" placeholder="1.5" value={tempInfraItem.premise} onChange={(e) => setTempInfraItem({ ...tempInfraItem, premise: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div className="col-span-2 text-[9px] text-text-secondary leading-tight mt-1">Acúmulo atrelado à Projeção de Volume Mensal do Step 2. O dado crescerá em formato de "bola de neve" gerando passivos para a fatura seguinte.</div>
+                      </>
+                    )}
+                  </div>
+                  
+                  <div className="mt-auto flex justify-end">
+                    <button
+                      onClick={() => {
+                        if (!tempInfraItem.name || !tempInfraItem.cost) return alert('Preencha nome e custo.');
+                        const parsedCost = parseFloat(tempInfraItem.cost.toString().replace(/\./g, '').replace(',', '.')) || 0;
+                        const parsedPremise = parseFloat(tempInfraItem.premise.toString()) || 0;
+                        
+                        setBcData({
+                          ...bcData,
+                          infrastructure: {
+                            ...(bcData.infrastructure || { cloudBuffer: 0, envMultiplier: 1.0, items: [] }),
+                            items: [
+                              ...(bcData.infrastructure?.items || []),
+                              {
+                                id: `infra-${Date.now()}`,
+                                name: tempInfraItem.name,
+                                type: tempInfraItem.type,
+                                cost: parsedCost,
+                                premise: parsedPremise
+                              }
+                            ]
+                          }
+                        });
+                        setTempInfraItem({ name: '', type: 'shared_fixed', cost: '', premise: '' });
+                      }}
+                      className="px-6 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition-colors flex items-center gap-2 shadow-lg shadow-primary/20"
+                    >
+                      <Plus className="w-4 h-4" /> Adicionar à Infraestrutura
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table of items */}
+              {(!bcData.infrastructure?.items || bcData.infrastructure.items.length === 0) ? (
+                <div className="p-8 border border-border-subtle border-dashed rounded-xl flex flex-col items-center justify-center text-text-secondary bg-element-bg/50">
+                  <Server className="w-8 h-8 mb-2 opacity-20" />
+                  <p>Nenhuma infraestrutura mapeada ainda.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto glass-panel border border-border-subtle rounded-xl">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-[10px] text-text-secondary uppercase tracking-wider border-b border-border-subtle bg-element-bg/50">
+                      <tr>
+                        <th className="px-4 py-3 font-bold">Natureza</th>
+                        <th className="px-4 py-3 font-bold">Item / Recurso</th>
+                        <th className="px-4 py-3 font-bold text-right pt-r">Base de Cálculo / Setup</th>
+                        <th className="px-4 py-3 font-bold text-center">Multiplicador Amb.</th>
+                        <th className="px-4 py-3 font-bold text-right text-primary">Custo Mensal (Go-Live)</th>
+                        <th className="px-4 py-3 font-bold text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bcData.infrastructure.items.map((item: any, idx: number) => {
+                        const typeLabels: Record<string, string> = {
+                          'shared_fixed': 'Compartilhado (Rateio %)',
+                          'variable_api': 'Transacional (Chamada)',
+                          'batch_instance': 'Fixo (Batch/Mes)',
+                          'storage_acumulativo': 'Data/Storage Acum.'
+                        };
+                        const typeColors: Record<string, string> = {
+                          'shared_fixed': 'bg-amber-500/10 text-amber-500',
+                          'variable_api': 'bg-primary/10 text-primary',
+                          'batch_instance': 'bg-purple-500/10 text-purple-400',
+                          'storage_acumulativo': 'bg-emerald-500/10 text-emerald-500'
+                        };
+                        
+                        return (
+                          <tr key={item.id} className="border-b border-border-subtle hover:bg-element-hover/30 transition-colors">
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded text-[9px] font-black tracking-widest uppercase ${typeColors[item.type] || 'bg-element-bg text-text-primary'}`}>
+                                {typeLabels[item.type] || item.type}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-xs uppercase">{item.name}</td>
+                            <td className="px-4 py-3 text-right">
+                              {item.type === 'shared_fixed' && (
+                                <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">{item.premise}%</span> sobre Custo Total R$ {formatNumber(item.cost)}</div>
+                              )}
+                              {item.type === 'variable_api' && (
+                                <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">{item.premise} req/vol</span> x R$ {formatNumber(item.cost)} unid.</div>
+                              )}
+                              {item.type === 'batch_instance' && (
+                                <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">R$ {formatNumber(item.cost)}</span> / mensal</div>
+                              )}
+                              {item.type === 'storage_acumulativo' && (
+                                <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">{item.premise} GB/vol</span> gerado x R$ {formatNumber(item.cost)} /GB</div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {item.type === 'shared_fixed' ? <span className="text-[10px] text-text-secondary">-- (Não Aplica)</span> : 
+                               <span className="text-[10px] font-bold text-amber-500">x{(bcData.infrastructure?.envMultiplier || 1.2).toFixed(1)}</span>}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {(() => {
+                                let monthlyEst = 0;
+                                let volumeText = '';
+                                const envMult = bcData.infrastructure?.envMultiplier || 1.2;
+                                const cloudBuff = (bcData.infrastructure?.cloudBuffer || 0) / 100;
+                                const matureVol = bcData.targetClients * bcData.avgVolume;
+                                if (item.type === 'shared_fixed') {
+                                  monthlyEst = item.cost * (item.premise / 100);
+                                  volumeText = 'Base Fixa/Corporativa';
+                                } else if (item.type === 'variable_api') {
+                                  monthlyEst = item.cost * matureVol * item.premise * envMult * (1 + cloudBuff);
+                                  volumeText = `Sobre ${formatNumber(matureVol * item.premise)} Reqs`;
+                                } else if (item.type === 'batch_instance') {
+                                  monthlyEst = item.cost * envMult * (1 + cloudBuff);
+                                  volumeText = 'Instância Fixa';
+                                } else if (item.type === 'storage_acumulativo') {
+                                  monthlyEst = item.cost * (matureVol * bcData.contractMonths) * item.premise * envMult * (1 + cloudBuff);
+                                  volumeText = `Acumula ${formatNumber(matureVol * bcData.contractMonths * item.premise)} GB`;
+                                }
+                                return (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-primary font-bold font-mono">R$ {formatNumber(monthlyEst)}</span>
+                                    <span className="text-[9px] text-text-secondary mt-0.5 uppercase tracking-wider">{volumeText}</span>
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => {
+                                  const novoItems = [...(bcData.infrastructure?.items || [])];
+                                  novoItems.splice(idx, 1);
+                                  setBcData({ ...bcData, infrastructure: { ...bcData.infrastructure!, items: novoItems }});
+                                }}
+                                className="p-1.5 text-text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors inline-flex"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
           {activeStep === 5 && (
@@ -1744,6 +2144,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
         resources: bcData.resources,
         volume_strategy: bcData.volumeStrategy,
         tax_model: bcData.taxModel,
+        infrastructure: bcData.infrastructure,
         status: 'Em Construção'
       };
 
@@ -1837,6 +2238,110 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     }));
   };
 
+  const getDetailedMonthlyTimeline = (): any[] => {
+    const timeline: any[] = [];
+    const [startYear, startMonth] = bcData.startDate.split('-').map(Number);
+    const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    const uniqueAreas = Array.from(new Set(bcData.resources.map(r => r.area))) as string[];
+    
+    // Check if we can extract volumetry safely
+    const volumeTimeline = getMonthlyVolumeDetails();
+
+    // Accumulator for IPCA factor per year
+    let accumulatedIPCAFactor = 1.0;
+    
+    // Accumulators for storage features
+    const accumulatedGbPerItem: Record<string, number> = {};
+
+    for (let m = 0; m < bcData.contractMonths; m++) {
+      const monthIdx = (startMonth - 1 + m) % 12;
+      const yearOffset = Math.floor((startMonth - 1 + m) / 12);
+      const year = startYear + yearOffset;
+      const isJanuary = monthIdx === 0;
+
+      // Apply IPCA if it's January (and not the first month of contract or first year)
+      let appliedIPCA = 0;
+      if (isJanuary && m > 0) {
+        const index = inflationIndices.find(idx => idx.year === year - 1 && !idx.month);
+        if (index) {
+          appliedIPCA = index.value;
+          accumulatedIPCAFactor *= (1 + (appliedIPCA / 100));
+        }
+      }
+
+      const areaCosts: Record<string, number> = {};
+      let totalHrMonth = 0;
+      let totalHC = 0;
+
+      uniqueAreas.forEach((area: string) => {
+        const activeResources = bcData.resources
+          .filter(r => r.area === area && (m + 1 >= (r.start_month || 1)) && (m + 1 <= (r.end_month || bcData.contractMonths)));
+
+        const costForArea = activeResources.reduce((acc, r) => {
+          const f = r.selected_faixa || 2;
+          const salary = f === 1 ? (r.base_salary_1 || (r.base_salary * 0.8 * (r.hr_rate || 1))) :
+            f === 3 ? (r.base_salary_3 || (r.base_salary * 1.2 * (r.hr_rate || 1))) :
+              (r.base_salary_2 || (r.base_salary * (r.hr_rate || 1)));
+          return acc + (salary * r.qty * ((r.allocation || 100) / 100));
+        }, 0);
+        const hcForArea = activeResources.reduce((acc, r) => acc + (r.qty * ((r.allocation || 100) / 100)), 0);
+
+        const projectedAreaCost = costForArea * accumulatedIPCAFactor;
+        areaCosts[area] = projectedAreaCost;
+        totalHrMonth += projectedAreaCost;
+        totalHC += hcForArea;
+      });
+
+      // IT INFRASTRUCTURE CALCULATIONS
+      let totalItMonth = 0;
+      const infraCosts: Record<string, number> = {};
+      const monthVol = volumeTimeline[m] || { clients: 0 };
+      const envMultiplier = bcData.infrastructure?.envMultiplier || 1.0;
+      const cloudBuffer = bcData.infrastructure?.cloudBuffer || 0;
+
+      (bcData.infrastructure?.items || []).forEach(item => {
+        let baseCost = 0;
+
+        if (item.type === 'shared_fixed') {
+          baseCost = item.cost * (item.premise / 100);
+        } else if (item.type === 'batch_instance') {
+          baseCost = item.cost * envMultiplier;
+        } else if (item.type === 'variable_api') {
+          baseCost = item.cost * item.premise * Math.max(0, monthVol.volume) * envMultiplier;
+        } else if (item.type === 'storage_acumulativo') {
+          const generatedThismonth = item.premise * Math.max(0, monthVol.volume);
+          accumulatedGbPerItem[item.id] = (accumulatedGbPerItem[item.id] || 0) + generatedThismonth;
+          baseCost = item.cost * accumulatedGbPerItem[item.id] * envMultiplier;
+        }
+
+        const costWithIpca = baseCost * accumulatedIPCAFactor;
+        const finalCost = costWithIpca * (1 + (cloudBuffer / 100));
+        infraCosts[item.id] = finalCost;
+        totalItMonth += finalCost;
+      });
+
+      timeline.push({
+        dateLabel: `${monthsNames[monthIdx]}/${year}`,
+        monthVolCalculated: Math.max(0, monthVol.volume),
+        areaCosts,
+        infraCosts,
+        totalItMonth,
+        totalHrMonth,
+        appliedIPCA,
+        total: totalHrMonth + totalItMonth,
+        totalHC,
+        isJanuary: isJanuary && m > 0
+      });
+    }
+    return timeline;
+  };
+
+  const calculateLTVSummary = () => {
+    const timeline = getDetailedMonthlyTimeline();
+    return timeline.reduce((acc, m) => acc + m.total, 0);
+  };
+
   const renderMonthlyDetailsPage = () => {
     const months = getDetailedMonthlyTimeline();
     const uniqueAreas: string[] = Array.from(new Set(bcData.resources.map(r => r.area))).sort() as string[];
@@ -1858,11 +2363,11 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
             </button>
             <div>
               <h2 className="text-xl font-bold">Projeção Mensal de Pessoal</h2>
-              <p className="text-text-secondary text-[11px]">Detalhamento por área e reajuste IPCA acumulado.</p>
+              <p className="text-text-secondary text-[11px]">Detalhamento por área (Headcount) de LTV OPEX.</p>
             </div>
           </div>
           <div className="glass-panel px-4 py-2 rounded-xl border border-primary/20 bg-primary/5">
-            <div className="text-[9px] text-text-secondary uppercase font-bold tracking-widest mb-0.5">Investimento Total LTV</div>
+            <div className="text-[9px] text-text-secondary uppercase font-bold tracking-widest mb-0.5">LTV OPEX (Pessoal)</div>
             <div className="text-lg font-display font-bold text-primary">R$ {formatNumber(calculateLTVResources())}</div>
           </div>
         </div>
@@ -1874,13 +2379,13 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                 <tr className="bg-element-bg border-b border-border-subtle">
                   <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest sticky left-0 bg-element-bg z-10 w-28 border-r border-border-subtle/50">Mês/Ano</th>
                   {uniqueAreas.map(area => (
-                    <th key={area} className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-right min-w-[100px]">
+                    <th key={area} className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-right min-w-[100px] whitespace-nowrap">
                       {area || 'N/A'}
                     </th>
                   ))}
-                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-center">HC Total</th>
-                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-center">IPCA</th>
-                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-right bg-primary/5 text-primary">Total Mensal</th>
+                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-center border-x border-border-subtle/30">HC Total</th>
+                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-center text-emerald-500">IPCA</th>
+                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-right bg-primary/5 text-primary">SubTotal Mensal</th>
                 </tr>
               </thead>
               <tbody>
@@ -1892,7 +2397,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                         R$ {formatNumber(item.areaCosts[area] || 0)}
                       </td>
                     ))}
-                    <td className="py-1.5 px-4 text-center">
+                    <td className="py-1.5 px-4 text-center border-x border-border-subtle/30">
                       <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold text-[9px]">
                         {item.totalHC.toFixed(1)}
                       </span>
@@ -1910,7 +2415,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                       )}
                     </td>
                     <td className="py-1.5 px-4 text-right font-bold text-primary bg-primary/5">
-                      R$ {formatNumber(item.total)}
+                      R$ {formatNumber(item.totalHrMonth)}
                     </td>
                   </tr>
                 ))}
@@ -1924,9 +2429,9 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                       <td key={area} className="py-3 px-4 text-right text-primary text-[10px]">R$ {formatNumber(areaTotal)}</td>
                     )
                   })}
-                  <td className="py-3 px-4 text-center text-text-secondary text-[10px]">--</td>
+                  <td className="py-3 px-4 text-center text-text-secondary text-[10px] border-x border-border-subtle/30">--</td>
                   <td></td>
-                  <td className="py-3 px-4 text-right text-primary bg-primary/10 text-base">R$ {formatNumber(calculateLTVResources())}</td>
+                  <td className="py-3 px-4 text-right text-primary bg-primary/10 text-sm">R$ {formatNumber(calculateLTVResources())}</td>
                 </tr>
               </tfoot>
             </table>
@@ -1945,65 +2450,110 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     );
   };
 
-  const getDetailedMonthlyTimeline = (): any[] => {
-    const timeline: any[] = [];
-    const [startYear, startMonth] = bcData.startDate.split('-').map(Number);
-    const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const renderInfraDetailsPage = () => {
+    const months = getDetailedMonthlyTimeline();
+    const infraItems = bcData.infrastructure?.items || [];
+    const totalInfraLTV = months.reduce((acc, m) => acc + m.totalItMonth, 0);
 
-    const uniqueAreas = Array.from(new Set(bcData.resources.map(r => r.area))) as string[];
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -20 }}
+        className="space-y-6"
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => { setView('new-bc'); setActiveStep(4); }}
+              className="p-2 rounded-xl bg-element-bg border border-border-subtle hover:bg-element-hover transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="text-xl font-bold">Projeção Mensal de Infra (TI)</h2>
+              <p className="text-text-secondary text-[11px]">Detalhamento individual de OPEX SaaS / Cloud mensalizada.</p>
+            </div>
+          </div>
+          <div className="glass-panel px-4 py-2 rounded-xl border border-amber-500/20 bg-amber-500/5">
+            <div className="text-[9px] text-text-secondary uppercase font-bold tracking-widest mb-0.5">LTV Global (Nuvem)</div>
+            <div className="text-lg font-display font-bold text-amber-500">R$ {formatNumber(totalInfraLTV)}</div>
+          </div>
+        </div>
 
-    // Accumulator for IPCA factor per year
-    let accumulatedIPCAFactor = 1.0;
+        <div className="glass-panel rounded-3xl border border-border-subtle overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px] text-left border-collapse">
+              <thead>
+                <tr className="bg-element-bg border-b border-border-subtle">
+                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest sticky left-0 bg-element-bg z-10 w-28 border-r border-border-subtle/50">Mês/Ano</th>
+                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-center border-r border-border-subtle/30">Trans. (Vol)</th>
+                  {infraItems.map(it => (
+                    <th key={it.id} className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-right min-w-[100px] whitespace-nowrap">
+                      {it.name}
+                    </th>
+                  ))}
+                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-center text-emerald-500 border-l border-border-subtle/30">IPCA + Buffer</th>
+                  <th className="py-3 px-4 font-bold uppercase text-[9px] tracking-widest text-right bg-amber-500/5 text-amber-500 min-w-[120px]">SubTotal TI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(months as any[]).map((item, i) => (
+                  <tr key={i} className={`border-b border-border-subtle/30 hover:bg-element-hover/50 transition-colors ${item.isJanuary ? 'bg-amber-500/5' : ''}`}>
+                    <td className="py-1.5 px-4 font-bold sticky left-0 bg-surface border-r border-border-subtle/50">{item.dateLabel}</td>
+                    <td className="py-1.5 px-4 text-center border-r border-border-subtle/30 font-mono text-[9px] text-text-secondary">
+                      {Math.round(item.monthVolCalculated)}
+                    </td>
+                    {infraItems.map((it) => (
+                      <td key={it.id} className="py-1.5 px-4 text-right font-medium text-text-secondary">
+                        R$ {formatNumber(item.infraCosts[it.id] || 0)}
+                      </td>
+                    ))}
+                    <td className="py-1.5 px-4 text-center border-l border-border-subtle/30">
+                      {item.appliedIPCA > 0 ? (
+                        <div className="flex flex-col items-center">
+                          <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-bold text-[9px]">
+                            +{item.appliedIPCA}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-text-secondary text-[9px]">--</span>
+                      )}
+                    </td>
+                    <td className="py-1.5 px-4 text-right font-bold text-amber-500 bg-amber-500/5">
+                      R$ {formatNumber(item.totalItMonth)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-element-bg font-bold">
+                <tr>
+                  <td className="py-3 px-4 sticky left-0 bg-element-bg border-r border-border-subtle/50 uppercase text-[9px]">TOTAIS LTV</td>
+                  <td className="py-3 px-4 border-r border-border-subtle/30 text-center text-text-secondary text-[10px]">--</td>
+                  {infraItems.map((it) => {
+                    const areaTotal = (months as any[]).reduce((acc: number, m: any) => acc + (m.infraCosts[it.id] || 0), 0);
+                    return (
+                      <td key={it.id} className="py-3 px-4 text-right text-text-secondary text-[10px]">R$ {formatNumber(areaTotal)}</td>
+                    )
+                  })}
+                  <td className="py-3 px-4 text-center text-text-secondary text-[10px] border-l border-border-subtle/30">--</td>
+                  <td className="py-3 px-4 text-right text-amber-500 bg-amber-500/10 text-sm">R$ {formatNumber(totalInfraLTV)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
 
-    for (let m = 0; m < bcData.contractMonths; m++) {
-      const monthIdx = (startMonth - 1 + m) % 12;
-      const yearOffset = Math.floor((startMonth - 1 + m) / 12);
-      const year = startYear + yearOffset;
-      const isJanuary = monthIdx === 0;
-
-      // Apply IPCA if it's January (and not the first month of contract or first year)
-      let appliedIPCA = 0;
-      if (isJanuary && m > 0) {
-        const index = inflationIndices.find(idx => idx.year === year - 1 && !idx.month);
-        if (index) {
-          appliedIPCA = index.value;
-          accumulatedIPCAFactor *= (1 + (appliedIPCA / 100));
-        }
-      }
-
-      const areaCosts: Record<string, number> = {};
-      let totalMonth = 0;
-      let totalHC = 0;
-
-      uniqueAreas.forEach((area: string) => {
-        const activeResources = bcData.resources
-          .filter(r => r.area === area && (m + 1 >= (r.start_month || 1)) && (m + 1 <= (r.end_month || bcData.contractMonths)));
-
-        const costForArea = activeResources.reduce((acc, r) => {
-          const f = r.selected_faixa || 2;
-          const salary = f === 1 ? (r.base_salary_1 || (r.base_salary * 0.8 * (r.hr_rate || 1))) :
-            f === 3 ? (r.base_salary_3 || (r.base_salary * 1.2 * (r.hr_rate || 1))) :
-              (r.base_salary_2 || (r.base_salary * (r.hr_rate || 1)));
-          return acc + (salary * r.qty * ((r.allocation || 100) / 100));
-        }, 0);
-        const hcForArea = activeResources.reduce((acc, r) => acc + (r.qty * ((r.allocation || 100) / 100)), 0);
-
-        const projectedAreaCost = costForArea * accumulatedIPCAFactor;
-        areaCosts[area] = projectedAreaCost;
-        totalMonth += projectedAreaCost;
-        totalHC += hcForArea;
-      });
-
-      timeline.push({
-        dateLabel: `${monthsNames[monthIdx]}/${year}`,
-        areaCosts,
-        appliedIPCA,
-        total: totalMonth,
-        totalHC,
-        isJanuary: isJanuary && m > 0
-      });
-    }
-    return timeline;
+        <div className="flex justify-end gap-3 mt-4">
+          <button
+            onClick={() => { setView('new-bc'); setActiveStep(4); }}
+            className="px-6 py-2.5 bg-element-bg border border-border-subtle rounded-xl text-sm font-bold hover:bg-element-hover transition-colors flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" /> Voltar ao Step 4
+          </button>
+        </div>
+      </motion.div>
+    );
   };
 
   return (
@@ -2012,7 +2562,55 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
         {view === 'overview' && renderOverview()}
         {view === 'new-bc' && renderNewBC()}
         {view === 'monthly-details' && renderMonthlyDetailsPage()}
+        {view === 'infra-details' && renderInfraDetailsPage()}
       </AnimatePresence>
+
+      {/* Catalog Modal */}
+      {isInfraCatalogOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface border border-border-subtle rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="flex justify-between items-center p-5 border-b border-border-subtle bg-element-bg">
+              <h3 className="text-lg font-bold text-text-primary flex items-center gap-2"><Server className="w-5 h-5 text-primary" /> Catálogo de Infraestrutura</h3>
+              <button onClick={() => setIsInfraCatalogOpen(false)} className="text-text-secondary hover:text-rose-500 transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 border-b border-border-subtle bg-element-bg/50">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                <input type="text" placeholder="Buscar recurso por nome ou natureza..." value={infraCatalogSearch} onChange={(e) => setInfraCatalogSearch(e.target.value)} className="w-full bg-element-bg border border-border-subtle rounded-xl py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:border-primary transition-colors shadow-sm" />
+              </div>
+            </div>
+            <div className="overflow-y-auto p-4 flex-1 bg-element-bg/10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {availableInfraItems.filter(i => i.name.toLowerCase().includes(infraCatalogSearch.toLowerCase()) || i.type.toLowerCase().includes(infraCatalogSearch.toLowerCase())).map(item => {
+                  const typeLabels: Record<string, string> = {
+                    'shared_fixed': 'Compartilhado (Rateio %)',
+                    'variable_api': 'Transacional (Chamada)',
+                    'batch_instance': 'Fixo (Batch/Mes)',
+                    'storage_acumulativo': 'Data/Storage Acum.'
+                  };
+                  return (
+                    <button 
+                      key={item.id}
+                      onClick={() => {
+                        setTempInfraItem({ ...tempInfraItem, name: item.name, type: item.type as any, cost: item.unit_cost.toString(), premise: item.type === 'variable_api' ? '1' : '' });
+                        setIsInfraCatalogOpen(false);
+                      }}
+                      className="flex flex-col p-4 rounded-xl border border-border-subtle bg-surface hover:border-primary hover:bg-primary/5 transition-all text-left group shadow-sm"
+                    >
+                      <div className="font-bold text-text-primary text-sm group-hover:text-primary transition-colors">{item.name}</div>
+                      <div className="text-[9px] text-text-secondary uppercase font-bold tracking-widest mt-1.5">{typeLabels[item.type] || item.type}</div>
+                      <div className="font-mono font-bold text-primary mt-2">{item.unit_cost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}</div>
+                    </button>
+                  );
+                })}
+                {availableInfraItems.length === 0 && (
+                  <div className="col-span-2 text-center py-12 text-text-secondary text-sm">Nenhum item disponível no banco dedados.</div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
