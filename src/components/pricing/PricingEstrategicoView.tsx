@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   AlertCircle,
   AlertTriangle,
+  CheckCircle2,
   PlusCircle,
   Edit2
 } from 'lucide-react';
@@ -49,10 +50,12 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     avgVolume: 0,
     contractMonths: 12,
     resources: [] as any[],
+    resourcesConfirmedIds: [] as string[],
     infrastructure: {
-      cloudBuffer: 0,
-      envMultiplier: 1.0,
-      items: [] as any[]
+      cloudBuffer: 15,
+      envMultiplier: 1.2,
+      items: [] as any[],
+      confirmedVigenciaIds: [] as string[]
     },
     volumeStrategy: {
       type: 'ramp' as 'ramp' | 'manual',
@@ -81,6 +84,25 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
   const [inflationIndices, setInflationIndices] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [isDirty, setIsDirty] = useState(false);
+  const [lastSavedData, setLastSavedData] = useState<string>('');
+
+  // Custom Dialog State
+  const [dialogConfig, setDialogConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'danger';
+    confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+    onConfirm: () => {}
+  });
 
   // Selection states for Step 2
   const [tempArea, setTempArea] = useState<string>('Sustentação');
@@ -99,8 +121,6 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
   
   const [isInfraCatalogOpen, setIsInfraCatalogOpen] = useState(false);
   const [infraCatalogSearch, setInfraCatalogSearch] = useState('');
-
-  const [lastSavedData, setLastSavedData] = useState<string>('');
 
   const [allBusinessCases, setAllBusinessCases] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -162,7 +182,9 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     }
   }, [bcData.id, view, bcData.contractMonths]);
 
-  const isDirty = JSON.stringify(bcData) !== lastSavedData;
+  React.useEffect(() => {
+    setIsDirty(JSON.stringify(bcData) !== lastSavedData);
+  }, [bcData, lastSavedData]);
 
   React.useEffect(() => {
     fetchData();
@@ -375,6 +397,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
               avgVolume: 0,
               contractMonths: 12,
               resources: [],
+              resourcesConfirmedIds: [],
               volumeStrategy: {
                 type: 'ramp',
                 rampUpMonths: 0,
@@ -397,9 +420,10 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                 reformaIbsCbsRate: 26.5
               },
               infrastructure: {
-                cloudBuffer: 0,
-                envMultiplier: 1.0,
-                items: []
+                cloudBuffer: 15,
+                envMultiplier: 1.2,
+                items: [],
+                confirmedVigenciaIds: []
               }
             });
             setActiveStep(1);
@@ -500,9 +524,10 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                     reformaIbsCbsRate: 26.5
                   },
                   infrastructure: {
-                    cloudBuffer: 0,
-                    envMultiplier: 1.0,
-                    items: []
+                    cloudBuffer: 15,
+                    envMultiplier: 1.2,
+                    items: [],
+                    confirmedVigenciaIds: []
                   }
                 });
                 setActiveStep(1);
@@ -570,6 +595,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                 avgVolume: bc.avg_volume || 0,
                                 contractMonths: bc.contract_months || 12,
                                 resources: bc.resources || [],
+                                resourcesConfirmedIds: bc.resources_confirmed_ids || [],
                                 volumeStrategy: bc.volume_strategy || {
                                   type: 'ramp',
                                   rampUpMonths: 0,
@@ -592,9 +618,10 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                   reformaIbsCbsRate: 26.5
                                 },
                                 infrastructure: bc.infrastructure || {
-                                  cloudBuffer: 0,
-                                  envMultiplier: 1.0,
-                                  items: []
+                                  cloudBuffer: 15,
+                                  envMultiplier: 1.2,
+                                  items: [],
+                                  confirmedVigenciaIds: []
                                 }
                               });
                               setActiveStep(1);
@@ -607,11 +634,19 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                             <span className="text-[10px] font-bold uppercase">Abrir</span>
                           </button>
                           <button
-                            onClick={async () => {
-                              if (confirm('Deseja realmente excluir este Business Case?')) {
-                                const { error } = await supabase.from('business_cases').delete().eq('id', bc.id);
-                                if (!error) fetchBusinessCases();
-                              }
+                            onClick={() => {
+                              setDialogConfig({
+                                isOpen: true,
+                                title: 'Excluir Business Case',
+                                message: `Tem certeza que deseja apagar "${bc.name}"? Esta ação não pode ser desfeita.`,
+                                type: 'danger',
+                                confirmLabel: 'Excluir permanentemente',
+                                cancelLabel: 'Desistir',
+                                onConfirm: async () => {
+                                  const { error } = await supabase.from('business_cases').delete().eq('id', bc.id);
+                                  if (!error) fetchBusinessCases();
+                                }
+                              });
                             }}
                             className="p-2 text-text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
                           >
@@ -647,32 +682,41 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
         exit={{ opacity: 0, y: -20 }}
         className="space-y-6"
       >
-        <div className="flex items-start md:items-center justify-between gap-4 flex-col md:flex-row">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setView('overview')}
-              className="p-2 rounded-xl bg-element-bg border border-border-subtle hover:bg-element-hover transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h2 className="text-2xl font-bold">Business Case</h2>
-              <p className="text-text-secondary text-sm">Preencha as informações para construir a projeção financeira.</p>
+          <div className="flex items-start md:items-center justify-between gap-4 flex-col md:flex-row">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setView('overview')}
+                className="p-2.5 rounded-xl bg-element-bg border border-border-subtle hover:bg-element-hover transition-colors shadow-sm"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-text-primary to-text-secondary bg-clip-text text-transparent">Business Case</h2>
+                <p className="text-text-secondary text-sm">Construção da Projeção Estratégica</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Status de Salvamento Reposicionado */}
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tighter mr-2">
+                {saveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin text-primary" /> <span className="text-primary">Sincronizando...</span></>}
+                {saveStatus === 'saved' && <><Cloud className="w-3 h-3 text-emerald-500" /> <span className="text-emerald-500">Salvo no Banco</span></>}
+                {saveStatus === 'error' && <><Cloud className="w-3 h-3 text-rose-500" /> <span className="text-rose-500">Falha ao Salvar</span></>}
+              </div>
+
+              <button
+                onClick={() => saveBusinessCase()}
+                disabled={!isDirty || isSaving}
+                className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 shadow-xl whitespace-nowrap outline-none
+                    ${isDirty ? 'bg-amber-500 text-white shadow-amber-500/30 ring-4 ring-amber-500/20 animate-pulse' : 'bg-primary text-white shadow-primary/20 hover:bg-blue-600'} 
+                    disabled:opacity-50 disabled:grayscale disabled:animate-none disabled:ring-0`}
+                title={isDirty ? 'Você tem alterações pendentes!' : 'Tudo salvo'}
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isDirty ? 'Salvar Mudanças' : 'Salvar'}
+              </button>
             </div>
           </div>
-
-          <button
-            onClick={() => saveBusinessCase()}
-            disabled={!isDirty || isSaving}
-            className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 shadow-xl whitespace-nowrap outline-none
-                ${isDirty ? 'bg-amber-500 text-white shadow-amber-500/30 ring-4 ring-amber-500/20 animate-pulse' : 'bg-primary text-white shadow-primary/20 hover:bg-blue-600'} 
-                disabled:opacity-50 disabled:grayscale disabled:animate-none disabled:ring-0`}
-            title={isDirty ? 'Você tem alterações pendentes!' : 'Tudo salvo'}
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {isDirty ? 'Salvar Mudanças' : 'Salvar'}
-          </button>
-        </div>
 
         {/* Stepper */}
         <div className="glass-panel p-4 rounded-xl border border-border-subtle">
@@ -1358,7 +1402,17 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                       const role = availableRoles.find(r => r.id === tempRoleId);
                       if (role) {
                         const finalArea = tempArea === 'Outro' ? tempCustomArea : tempArea;
-                        if (!finalArea) return alert('Por favor, defina o nome da área.');
+                        if (!finalArea) {
+                           setDialogConfig({
+                             isOpen: true,
+                             title: 'Definição de Área',
+                             message: 'Por favor, informe o nome da área para este recurso.',
+                             type: 'info',
+                             confirmLabel: 'Entendido',
+                             onConfirm: () => {}
+                           });
+                           return;
+                        }
 
                         setBcData({
                           ...bcData,
@@ -1384,21 +1438,31 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                   </button>
 
                   {bcData.resources.some(r => (r.start_month || 0) > bcData.contractMonths || (r.end_month || 0) > bcData.contractMonths) && (
-                     <button 
-                       onClick={() => {
-                         if (confirm('Deseja ajustar automaticamente todos os prazos para o limite do contrato? (Isso apenas cortará os meses excedentes)')) {
-                           const newRes = bcData.resources.map(r => ({
-                             ...r,
-                             end_month: Math.min(r.end_month || bcData.contractMonths, bcData.contractMonths)
-                           }));
-                           setBcData({...bcData, resources: newRes});
-                         }
-                       }}
-                       className="px-4 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-xl text-xs font-bold hover:bg-amber-500 hover:text-white transition-all flex items-center gap-2 animate-pulse shadow-lg shadow-amber-500/10"
-                     >
-                       <AlertTriangle className="w-3.5 h-3.5" /> Sincronizar Prazos
-                     </button>
-                  )}
+                      <button 
+                        onClick={() => {
+                          setDialogConfig({
+                            isOpen: true,
+                            title: 'Sincronizar Prazos (Recursos)',
+                            message: 'Deseja ajustar automaticamente todos os prazos para o limite do contrato? (Isso apenas cortará os meses excedentes)',
+                            type: 'warning',
+                            confirmLabel: 'Sincronizar Agora',
+                            cancelLabel: 'Manter como está',
+                            onConfirm: () => {
+                              const limit = bcData.contractMonths;
+                              const nextRes = bcData.resources.map(r => ({ ...r, end_month: limit }));
+                              setBcData({
+                                ...bcData, 
+                                resources: nextRes,
+                                resourcesConfirmedIds: []
+                              });
+                            }
+                          });
+                        }}
+                        className="px-4 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-xl text-xs font-bold hover:bg-amber-500 hover:text-white transition-all flex items-center gap-2 animate-pulse shadow-lg shadow-amber-500/10"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" /> Sincronizar Prazos
+                      </button>
+                    )}
                 </div>
               </div>
 
@@ -1415,8 +1479,8 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                         <th className="px-2 py-4 font-bold">Cargo</th>
                         <th className="px-2 py-4 font-bold">Área</th>
                         <th className="px-2 py-4 font-bold">Faixa</th>
-                        <th className="px-2 py-4 font-bold text-center">Mês Início</th>
-                        <th className="px-2 py-4 font-bold text-center">Mês Fim</th>
+                        <th className="px-2 py-4 font-bold text-left">Mês Início</th>
+                        <th className="px-2 py-4 font-bold text-left">Mês Fim</th>
                         <th className="px-2 py-4 font-bold text-center">Tipo</th>
                         <th className="px-2 py-4 font-bold text-right">Custo (RH)</th>
                         <th className="px-2 py-4 font-bold text-center">HC</th>
@@ -1465,7 +1529,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                           <span className="text-[8px] font-bold uppercase tracking-tighter">Erro de Prazo</span>
                                        </div>
                                     )}
-                                    {resources.some(r => (r.end_month || bcData.contractMonths) < bcData.contractMonths) && (
+                                    {resources.some(r => (r.end_month || bcData.contractMonths) < bcData.contractMonths && !bcData.resourcesConfirmedIds?.includes(r.id)) && (
                                        <div className="flex items-center gap-1 bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded border border-amber-500/20" title="Existem recursos com rampa encerrada antes do fim do contrato nesta área">
                                           <AlertCircle className="w-2.5 h-2.5" />
                                           <span className="text-[8px] font-bold uppercase tracking-tighter">Rampa Incompleta</span>
@@ -1534,7 +1598,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                       </div>
                                     </td>
                                     <td className="px-2 py-4">
-                                      <div className="flex flex-col items-center">
+                                      <div className="flex flex-col items-start">
                                         <input
                                           type="number"
                                           min="0"
@@ -1549,8 +1613,8 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                         />
                                       </div>
                                     </td>
-                                    <td className="px-2 py-4 relative">
-                                      <div className="flex flex-col items-center">
+                                    <td className="px-2 py-4 relative group">
+                                      <div className="flex items-center justify-start gap-1.5">
                                         <input
                                           type="number"
                                           min="0"
@@ -1559,14 +1623,29 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                           onChange={(e) => {
                                             const newRes = [...bcData.resources];
                                             newRes[index].end_month = parseInt(e.target.value) || bcData.contractMonths;
-                                            setBcData({ ...bcData, resources: newRes });
+                                            // Reset manual confirmation if value changes
+                                            const nextConfirmed = (bcData.resourcesConfirmedIds || []).filter(id => id !== res.id);
+                                            setBcData({ ...bcData, resources: newRes, resourcesConfirmedIds: nextConfirmed });
                                           }}
-                                          className={`w-16 bg-element-bg border rounded-lg px-2 py-1 text-center font-bold text-[10px] focus:ring-1 focus:ring-primary outline-none ${res.end_month < bcData.contractMonths ? 'border-amber-500/50' : 'border-border-subtle'}`}
+                                          className={`w-12 bg-element-bg border rounded-lg px-1 py-1 text-center font-bold text-[10px] focus:ring-1 focus:ring-primary outline-none transition-all ${res.end_month < bcData.contractMonths ? 'border-amber-500/50 text-amber-600' : 'border-border-subtle'}`}
                                         />
                                         {res.end_month < bcData.contractMonths && (
-                                          <div className="absolute -right-2 top-1/2 -translate-y-1/2 text-amber-500" title="Rampa encerrada antes do fim do contrato">
-                                            <AlertCircle className="w-3 h-3" />
-                                          </div>
+                                          bcData.resourcesConfirmedIds?.includes(res.id) ? (
+                                            <div className="text-emerald-500" title="Vigência confirmada manualmente">
+                                              <CheckCircle2 className="w-3.5 h-3.5" />
+                                            </div>
+                                          ) : (
+                                            <button 
+                                              onClick={() => {
+                                                 const nextConfirmed = [...(bcData.resourcesConfirmedIds || []), res.id];
+                                                 setBcData({ ...bcData, resourcesConfirmedIds: nextConfirmed });
+                                              }}
+                                              className="text-amber-500 hover:text-emerald-500 transition-colors"
+                                              title="Confirmar que este prazo reduzido está correto"
+                                            >
+                                              <AlertCircle className="w-3.5 h-3.5" />
+                                            </button>
+                                          )
                                         )}
                                       </div>
                                     </td>
@@ -1641,8 +1720,17 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                         )}
                                         <button
                                           onClick={() => {
-                                            const newRes = bcData.resources.filter((_, i) => i !== index);
-                                            setBcData({ ...bcData, resources: newRes });
+                                            setDialogConfig({
+                                              isOpen: true,
+                                              title: 'Remover Recurso',
+                                              message: 'Tem certeza que deseja remover este recurso do Business Case?',
+                                              type: 'danger',
+                                              confirmLabel: 'Remover',
+                                              onConfirm: () => {
+                                                const newRes = bcData.resources.filter((_, i) => i !== index);
+                                                setBcData({ ...bcData, resources: newRes });
+                                              }
+                                            });
                                           }}
                                           className="p-1.5 text-text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
                                         >
@@ -1695,7 +1783,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                     <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
                       <Calendar className="w-4 h-4" /> Evolução Anual do Custo Mensal
                     </h4>
-                    <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2">
+                    <div className="space-y-2 pr-2">
                       {getYearlyCostEvolution().map((yearData: any, i: number) => (
                         <div key={i} className="flex justify-between items-center text-xs py-1.5 border-b border-border-subtle last:border-0 hover:bg-white/5 transition-colors group">
                           <div className="flex flex-col">
@@ -1719,9 +1807,9 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                     </div>
                     <button
                       onClick={() => setView('monthly-details')}
-                      className="w-full mt-4 py-2 border border-border-subtle rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-element-hover transition-colors flex items-center justify-center gap-2"
+                      className="w-full mt-4 py-3 bg-primary/5 border border-primary/20 text-primary rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-primary hover:text-white hover:shadow-lg hover:shadow-primary/20 transition-all duration-300 flex items-center justify-center gap-2 group"
                     >
-                      <FileSpreadsheet className="w-3 h-3" /> Ver Detalhamento Mensal
+                      <FileSpreadsheet className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" /> Ver Detalhamento Mensal de Recursos
                     </button>
                   </div>
                 </div>
@@ -1732,77 +1820,18 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-bold mb-1">Infraestrutura (TI)</h3>
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    Infraestrutura (TI) 
+                    {bcData.infrastructure.items.some((i: any) => i.end_month < bcData.contractMonths && !bcData.infrastructure.confirmedVigenciaIds?.includes(i.id)) && (
+                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-600 text-[9px] rounded-full flex items-center gap-1 border border-amber-500/20">
+                        <AlertTriangle className="w-3 h-3" /> VIGÊNCIA INCOMPLETA
+                      </span>
+                    )}
+                  </h2>
                   <p className="text-text-secondary text-sm">Controle de OPEX, nuvem e licenças com projeção escalável.</p>
                 </div>
               </div>
 
-              {/* KPIs de Infraestrutura */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
-                <div className="glass-panel p-4 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col justify-center">
-                  <span className="text-[10px] text-primary uppercase font-bold tracking-widest mb-1">Custo Médio Mensal (TI)</span>
-                  <div className="text-2xl font-display font-bold text-text-primary">
-                    R$ {formatNumber(getDetailedMonthlyTimeline().reduce((acc, m) => acc + m.totalItMonth, 0) / Math.max(1, bcData.contractMonths))}
-                  </div>
-                </div>
-                <div className="glass-panel p-4 rounded-2xl border border-border-subtle bg-element-bg/30 flex flex-col justify-center">
-                  <span className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">Total LTV (TI)</span>
-                  <div className="text-xl font-display font-bold text-text-primary">
-                    R$ {formatNumber(getDetailedMonthlyTimeline().reduce((acc, m) => acc + m.totalItMonth, 0))}
-                  </div>
-                </div>
-                <div className="glass-panel p-4 rounded-2xl border border-border-subtle bg-element-bg/30 flex flex-col justify-center">
-                  <span className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">Custo Fim de Contrato (Pico)</span>
-                  <div className="text-xl font-display font-bold text-amber-500">
-                    R$ {formatNumber(getDetailedMonthlyTimeline().slice(-1)[0]?.totalItMonth || 0)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tabela Resumo Anual Infra */}
-              {bcData.infrastructure?.items && bcData.infrastructure.items.length > 0 && (
-                <div className="glass-panel p-5 rounded-2xl border border-border-subtle bg-element-bg/50">
-                  <h4 className="text-xs font-bold uppercase tracking-widest text-text-secondary mb-4 flex items-center gap-2">
-                    <Cloud className="w-4 h-4" /> Evolução Anual do Custo Mensal (Cloud)
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {(() => {
-                      const timeline = getDetailedMonthlyTimeline();
-                      const years: Record<string, { total: number, months: number }> = {};
-                      timeline.forEach(m => {
-                         const yyyy = m.dateLabel.split('/')[1];
-                         if (!years[yyyy]) years[yyyy] = { total: 0, months: 0 };
-                         years[yyyy].total += m.totalItMonth;
-                         years[yyyy].months += 1;
-                      });
-                      return Object.entries(years).map(([year, data]) => (
-                        <div key={year} className="bg-surface border border-border-subtle rounded-xl p-3 flex flex-col gap-1 relative overflow-hidden group hover:border-primary/50 transition-colors">
-                          <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
-                          <span className="text-[10px] font-bold text-text-secondary">Ano {year}</span>
-                          <div className="flex justify-between items-end mt-1">
-                            <div>
-                              <span className="text-[9px] text-text-secondary block">Média Mensal</span>
-                              <span className="font-bold text-primary text-sm">R$ {formatNumber(data.total / data.months)}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[9px] text-text-secondary block">Acumulado</span>
-                              <span className="font-bold text-amber-500 text-xs">R$ {formatNumber(data.total)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                  
-                  <button
-                    onClick={() => setView('infra-details')}
-                    className="w-full mt-4 py-2 border border-border-subtle rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-element-hover transition-colors flex items-center justify-center gap-2"
-                  >
-                    <FileSpreadsheet className="w-3 h-3" /> Ver Detalhamento Mensal de Infraestrutura
-                  </button>
-                </div>
-              )}
 
               {/* FinOps Controls */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1874,6 +1903,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                          <option value="shared_fixed">Compartilhado (Rateio %)</option>
                          <option value="variable_api">Transacional (Chamada)</option>
                          <option value="batch_instance">Fixo Dedicado Mensal (Instância/Batch)</option>
+                         <option value="fixed_unit_license">Licenciamento Unitário (Fixo)</option>
                          <option value="storage_acumulativo">Armazenamento Acumulativo (Storage/DB Mensal)</option>
                        </select>
                      </div>
@@ -1915,6 +1945,19 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                         <div className="col-span-2 text-[9px] text-text-secondary leading-tight mt-1">Custo será lançado integralmente a cada mês independentemente de base de clientes.</div>
                       </>
                     )}
+                    {tempInfraItem.type === 'fixed_unit_license' && (
+                      <>
+                        <div>
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Custo por Licença (R$)</label>
+                          <input type="text" placeholder="49.90" value={tempInfraItem.cost} onChange={(e) => setTempInfraItem({ ...tempInfraItem, cost: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Quantidade de Licenças</label>
+                          <input type="number" min="1" placeholder="10" value={tempInfraItem.premise} onChange={(e) => setTempInfraItem({ ...tempInfraItem, premise: e.target.value })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                        </div>
+                        <div className="col-span-2 text-[9px] text-text-secondary leading-tight mt-1">Custo fixo mensal baseado em seats/usuários. Não escala com o volume de clientes finais.</div>
+                      </>
+                    )}
                     {tempInfraItem.type === 'storage_acumulativo' && (
                       <>
                         <div>
@@ -1928,23 +1971,22 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                         <div className="col-span-2 text-[9px] text-text-secondary leading-tight mt-1">Acúmulo atrelado à Projeção de Volume Mensal do Step 2. O dado crescerá em formato de "bola de neve" gerando passivos para a fatura seguinte.</div>
                       </>
                     )}
-
-                    <div className="col-span-2 pt-2 border-t border-border-subtle mt-1 grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Mês Início</label>
-                        <input type="number" min="1" max={bcData.contractMonths} value={tempInfraItem.start_month} onChange={(e) => setTempInfraItem({ ...tempInfraItem, start_month: parseInt(e.target.value) || 1 })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Mês Fim</label>
-                        <input type="number" min={tempInfraItem.start_month} max={bcData.contractMonths} value={tempInfraItem.end_month || bcData.contractMonths} onChange={(e) => setTempInfraItem({ ...tempInfraItem, end_month: parseInt(e.target.value) || bcData.contractMonths })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
-                      </div>
-                    </div>
                   </div>
                   
                   <div className="mt-auto flex justify-end">
                     <button
                       onClick={() => {
-                        if (!tempInfraItem.name || !tempInfraItem.cost) return alert('Preencha nome e custo.');
+                        if (!tempInfraItem.name || !tempInfraItem.cost) {
+                          setDialogConfig({
+                            isOpen: true,
+                            title: 'Campos Obrigatórios',
+                            message: 'Para adicionar um item de infraestrutura, você precisa preencher o nome e o custo estimado.',
+                            type: 'info',
+                            confirmLabel: 'Vou preencher',
+                            onConfirm: () => {}
+                          });
+                          return;
+                        }
                         const parsedCost = parseFloat(tempInfraItem.cost.toString().replace(/\./g, '').replace(',', '.')) || 0;
                         const parsedPremise = parseFloat(tempInfraItem.premise.toString()) || 0;
                         
@@ -1983,63 +2025,255 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                   <p>Nenhuma infraestrutura mapeada ainda.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto glass-panel border border-border-subtle rounded-xl">
+                <div className="space-y-3">
+                  <div className="flex justify-end">
+                    {bcData.infrastructure?.items?.some((i: any) => (i.end_month || 0) < bcData.contractMonths && !bcData.infrastructure.confirmedVigenciaIds?.includes(i.id)) && (
+                      <button 
+                        onClick={() => {
+                          setDialogConfig({
+                            isOpen: true,
+                            title: 'Sincronizar Prazos de TI',
+                            message: 'Deseja ajustar automaticamente todos os prazos de infraestrutura para o limite do contrato?',
+                            type: 'warning',
+                            confirmLabel: 'Ajustar Tudo',
+                            cancelLabel: 'Manter Diferente',
+                            onConfirm: () => {
+                              const contractLimit = bcData.contractMonths;
+                              const newItems = (bcData.infrastructure?.items || []).map((i: any) => ({
+                                ...i,
+                                end_month: contractLimit
+                              }));
+                              setBcData(prev => ({ 
+                                ...prev, 
+                                infrastructure: { 
+                                  ...(prev.infrastructure || { cloudBuffer: 0, envMultiplier: 1.0 }), 
+                                  items: newItems 
+                                }
+                              }));
+                            }
+                          });
+                        }}
+                        className="px-4 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-xl text-xs font-bold hover:bg-amber-500 hover:text-white transition-all flex items-center gap-2 animate-pulse shadow-lg shadow-amber-500/10"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" /> Sincronizar Prazos (Infra)
+                      </button>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto glass-panel border border-border-subtle rounded-xl">
                   <table className="w-full text-sm text-left">
                     <thead className="text-[10px] text-text-secondary uppercase tracking-wider border-b border-border-subtle bg-element-bg/50">
                       <tr>
-                        <th className="px-4 py-3 font-bold">Natureza</th>
-                        <th className="px-4 py-3 font-bold">Item / Recurso</th>
-                        <th className="px-4 py-3 font-bold text-center">Vigência</th>
-                        <th className="px-4 py-3 font-bold text-right pt-r">Base de Cálculo / Setup</th>
-                        <th className="px-4 py-3 font-bold text-center">Multiplicador Amb.</th>
-                        <th className="px-4 py-3 font-bold text-right text-primary">Custo Mensal (Go-Live)</th>
-                        <th className="px-4 py-3 font-bold text-right">Ações</th>
+                        <th className="px-4 py-4 text-left font-bold whitespace-nowrap">Natureza</th>
+                        <th className="px-4 py-4 text-left font-bold whitespace-nowrap">Item / Recurso</th>
+                        <th className="px-4 py-4 text-left font-bold whitespace-nowrap">Mês Início</th>
+                        <th className="px-4 py-4 text-left font-bold text-amber-500 whitespace-nowrap">Mês Fim</th>
+                        <th className="px-4 py-4 text-center font-bold whitespace-nowrap">Base de Cálculo / Setup</th>
+                        <th className="px-4 py-4 text-center font-bold whitespace-nowrap">Multiplicador Amb.</th>
+                        <th className="px-4 py-4 text-right font-bold text-primary whitespace-nowrap">Custo Mensal (Go-Live)</th>
+                        <th className="px-4 py-4 text-right font-bold whitespace-nowrap">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bcData.infrastructure.items.map((item: any, idx: number) => {
-                        const typeLabels: Record<string, string> = {
-                          'shared_fixed': 'Compartilhado (Rateio %)',
-                          'variable_api': 'Transacional (Chamada)',
-                          'batch_instance': 'Fixo (Batch/Mes)',
-                          'storage_acumulativo': 'Data/Storage Acum.'
-                        };
-                        const typeColors: Record<string, string> = {
-                          'shared_fixed': 'bg-amber-500/10 text-amber-500',
-                          'variable_api': 'bg-primary/10 text-primary',
-                          'batch_instance': 'bg-purple-500/10 text-purple-400',
-                          'storage_acumulativo': 'bg-emerald-500/10 text-emerald-500'
-                        };
-                        
                         return (
                           <tr key={item.id} className="border-b border-border-subtle hover:bg-element-hover/30 transition-colors">
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-1 rounded text-[9px] font-black tracking-widest uppercase ${typeColors[item.type] || 'bg-element-bg text-text-primary'}`}>
-                                {typeLabels[item.type] || item.type}
-                              </span>
+                               <div className="flex flex-col gap-1 items-start">
+                                 {item.type === 'variable_api' && <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/10 text-blue-500 border border-blue-500/20 whitespace-nowrap">Transacional (Chamada)</span>}
+                                 {item.type === 'shared_fixed' && <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20 whitespace-nowrap">Compartilhado (Rateio %)</span>}
+                                 {item.type === 'fixed_unit_license' && <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">Licenciamento Unitário</span>}
+                                 {item.type === 'batch_instance' && <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-purple-500/10 text-purple-500 border border-purple-500/20 whitespace-nowrap">Opcional / Por Instância</span>}
+                                 {item.type === 'storage_acumulativo' && <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 whitespace-nowrap">Armazenamento / Retenção</span>}
+                               </div>
                             </td>
                             <td className="px-4 py-3 font-bold text-xs uppercase">{item.name}</td>
-                            <td className="px-4 py-3 text-center">
-                              <span className="text-[10px] font-bold text-text-secondary px-2 py-1 bg-element-bg border border-border-subtle rounded-lg">
-                                M{item.start_month || 1} → M{item.end_month || bcData.contractMonths}
-                              </span>
+                            <td className="px-4 py-3 text-left">
+                              <input
+                                type="number"
+                                min="1"
+                                max={bcData.contractMonths}
+                                value={item.start_month || 1}
+                                onChange={(e) => {
+                                  const nextItems = [...(bcData.infrastructure?.items || [])];
+                                  nextItems[idx].start_month = parseInt(e.target.value) || 1;
+                                  setBcData({ ...bcData, infrastructure: { ...bcData.infrastructure!, items: nextItems }});
+                                }}
+                                className="w-12 bg-element-bg/50 border border-border-subtle rounded-lg px-1 py-1 text-center text-[11px] font-bold focus:border-primary outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
                             </td>
-                            <td className="px-4 py-3 text-right">
-                              {item.type === 'shared_fixed' && (
-                                <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">{item.premise}%</span> sobre Custo Total R$ {formatNumber(item.cost)}</div>
-                              )}
-                              {item.type === 'variable_api' && (
-                                <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">{item.premise} req/vol</span> x R$ {formatNumber(item.cost)} unid.</div>
-                              )}
-                              {item.type === 'batch_instance' && (
-                                <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">R$ {formatNumber(item.cost)}</span> / mensal</div>
-                              )}
-                              {item.type === 'storage_acumulativo' && (
-                                <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">{item.premise} GB/vol</span> gerado x R$ {formatNumber(item.cost)} /GB</div>
-                              )}
+                            <td className="px-4 py-3 text-left relative group">
+                              <div className="flex items-center justify-start gap-2">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={bcData.contractMonths}
+                                  value={item.end_month || bcData.contractMonths}
+                                  onChange={(e) => {
+                                    const nextItems = [...(bcData.infrastructure?.items || [])];
+                                    nextItems[idx].end_month = parseInt(e.target.value) || bcData.contractMonths;
+                                    const nextConfirmed = (bcData.infrastructure.confirmedVigenciaIds || []).filter(id => id !== item.id);
+                                    setBcData({ ...bcData, infrastructure: { ...bcData.infrastructure!, items: nextItems, confirmedVigenciaIds: nextConfirmed }});
+                                  }}
+                                  className={`w-12 bg-amber-500/5 border rounded-lg px-1 py-1 text-center text-[11px] font-bold text-amber-600 focus:border-amber-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-sm ${
+                                    (item.end_month || 0) < bcData.contractMonths ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-amber-500/30'
+                                  }`}
+                                />
+                                {(item.end_month || 0) < bcData.contractMonths && (
+                                  bcData.infrastructure.confirmedVigenciaIds?.includes(item.id) ? (
+                                    <div className="text-emerald-500" title="Vigência confirmada pelo analista">
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                    </div>
+                                  ) : (
+                                    <button 
+                                      onClick={() => {
+                                        const nextConfirmed = [...(bcData.infrastructure.confirmedVigenciaIds || []), item.id];
+                                        setBcData({ ...bcData, infrastructure: { ...bcData.infrastructure, confirmedVigenciaIds: nextConfirmed } });
+                                      }}
+                                      className="text-amber-500 hover:text-emerald-500 transition-colors"
+                                      title="Confirmar que esta vigência reduzida está correta"
+                                    >
+                                      <AlertTriangle className="w-3.5 h-3.5" />
+                                    </button>
+                                  )
+                                )}
+                              </div>
                             </td>
+                             <td className="px-4 py-3">
+                               <div className="flex items-center justify-center gap-2 leading-none max-w-[200px] mx-auto">
+                                 {item.type === 'shared_fixed' && (
+                                   <>
+                                     <div className="flex flex-col items-center gap-1 w-16">
+                                        <input 
+                                          type="number" step="any" value={item.premise}
+                                          onChange={(e) => {
+                                            const next = [...bcData.infrastructure.items];
+                                            next[idx].premise = parseFloat(e.target.value) || 0;
+                                            setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                          }}
+                                          className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                        />
+                                        <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">% Dedicação</span>
+                                     </div>
+                                     <span className="text-[10px] opacity-30 w-8 text-center">sobre</span>
+                                     <div className="flex flex-col items-center gap-1 w-24">
+                                        <input 
+                                          type="number" step="any" value={item.cost}
+                                          onChange={(e) => {
+                                            const next = [...bcData.infrastructure.items];
+                                            next[idx].cost = parseFloat(e.target.value) || 0;
+                                            setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                          }}
+                                          className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                        />
+                                        <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">Custo Base R$</span>
+                                     </div>
+                                   </>
+                                 )}
+                                 {item.type === 'variable_api' && (
+                                   <>
+                                     <div className="flex flex-col items-center gap-1 w-16">
+                                        <input 
+                                          type="number" step="any" value={item.premise}
+                                          onChange={(e) => {
+                                            const next = [...bcData.infrastructure.items];
+                                            next[idx].premise = parseFloat(e.target.value) || 0;
+                                            setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                          }}
+                                          className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                        />
+                                        <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">req/vol</span>
+                                     </div>
+                                     <span className="text-[10px] opacity-30 w-8 text-center font-bold">x</span>
+                                     <div className="flex flex-col items-center gap-1 w-24">
+                                        <input 
+                                          type="number" step="any" value={item.cost}
+                                          onChange={(e) => {
+                                            const next = [...bcData.infrastructure.items];
+                                            next[idx].cost = parseFloat(e.target.value) || 0;
+                                            setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                          }}
+                                          className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                        />
+                                        <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">R$ Unid.</span>
+                                     </div>
+                                   </>
+                                 )}
+                                 {item.type === 'batch_instance' && (
+                                   <div className="flex flex-col items-center gap-1 w-32">
+                                      <input 
+                                        type="number" step="any" value={item.cost}
+                                        onChange={(e) => {
+                                          const next = [...bcData.infrastructure.items];
+                                          next[idx].cost = parseFloat(e.target.value) || 0;
+                                          setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                        }}
+                                        className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                      />
+                                      <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">Custo Mensal R$</span>
+                                   </div>
+                                 )}
+                                 {item.type === 'fixed_unit_license' && (
+                                   <>
+                                     <div className="flex flex-col items-center gap-1 w-24">
+                                        <input 
+                                          type="number" step="any" value={item.cost}
+                                          onChange={(e) => {
+                                            const next = [...bcData.infrastructure.items];
+                                            next[idx].cost = parseFloat(e.target.value) || 0;
+                                            setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                          }}
+                                          className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                        />
+                                        <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">R$ Unit.</span>
+                                     </div>
+                                     <span className="text-[10px] opacity-30 w-8 text-center font-bold">x</span>
+                                     <div className="flex flex-col items-center gap-1 w-16">
+                                        <input 
+                                          type="number" step="any" value={item.premise}
+                                          onChange={(e) => {
+                                            const next = [...bcData.infrastructure.items];
+                                            next[idx].premise = parseFloat(e.target.value) || 0;
+                                            setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                          }}
+                                          className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                        />
+                                        <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">Licenças</span>
+                                     </div>
+                                   </>
+                                 )}
+                                 {item.type === 'storage_acumulativo' && (
+                                   <>
+                                     <div className="flex flex-col items-center gap-1 w-16">
+                                        <input 
+                                          type="number" step="any" value={item.premise}
+                                          onChange={(e) => {
+                                            const next = [...bcData.infrastructure.items];
+                                            next[idx].premise = parseFloat(e.target.value) || 0;
+                                            setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                          }}
+                                          className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                        />
+                                        <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">GB / VOL</span>
+                                     </div>
+                                     <span className="text-[10px] opacity-30 w-8 text-center font-bold">x</span>
+                                     <div className="flex flex-col items-center gap-1 w-24">
+                                        <input 
+                                          type="number" step="any" value={item.cost}
+                                          onChange={(e) => {
+                                            const next = [...bcData.infrastructure.items];
+                                            next[idx].cost = parseFloat(e.target.value) || 0;
+                                            setBcData({...bcData, infrastructure: {...bcData.infrastructure, items: next}});
+                                          }}
+                                          className="w-full bg-element-bg/50 border-b border-border-subtle focus:border-primary text-center font-bold text-primary outline-none transition-colors tabular-nums text-[11px] py-0.5"
+                                        />
+                                        <span className="text-[8px] uppercase tracking-tighter opacity-50 whitespace-nowrap">R$ / GB</span>
+                                     </div>
+                                   </>
+                                 )}
+                               </div>
+                             </td>
                             <td className="px-4 py-3 text-center">
-                              {item.type === 'shared_fixed' ? <span className="text-[10px] text-text-secondary">-- (Não Aplica)</span> : 
+                              {item.type === 'shared_fixed' || item.type === 'fixed_unit_license' ? <span className="text-[10px] text-text-secondary">-- (Não Aplica)</span> : 
                                <span className="text-[10px] font-bold text-amber-500">x{(bcData.infrastructure?.envMultiplier || 1.2).toFixed(1)}</span>}
                             </td>
                             <td className="px-4 py-3 text-right">
@@ -2058,6 +2292,9 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                 } else if (item.type === 'batch_instance') {
                                   monthlyEst = item.cost * envMult * (1 + cloudBuff);
                                   volumeText = 'Instância Fixa';
+                                } else if (item.type === 'fixed_unit_license') {
+                                  monthlyEst = item.cost * item.premise; // Isento de Buffer e Env Multiplier
+                                  volumeText = 'Licenciamento Mensal';
                                 } else if (item.type === 'storage_acumulativo') {
                                   monthlyEst = item.cost * (matureVol * bcData.contractMonths) * item.premise * envMult * (1 + cloudBuff);
                                   volumeText = `Acumula ${formatNumber(matureVol * bcData.contractMonths * item.premise)} GB`;
@@ -2071,22 +2308,113 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                               })()}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <button
-                                onClick={() => {
-                                  const novoItems = [...(bcData.infrastructure?.items || [])];
-                                  novoItems.splice(idx, 1);
-                                  setBcData({ ...bcData, infrastructure: { ...bcData.infrastructure!, items: novoItems }});
-                                }}
-                                className="p-1.5 text-text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors inline-flex"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex items-center justify-end gap-1">
+                                {(item.end_month || 0) < bcData.contractMonths && (
+                                  <button
+                                    onClick={() => {
+                                      const nextStart = (item.end_month || 0) + 1;
+                                      if (nextStart > bcData.contractMonths) return;
+
+                                      const clonedItem = {
+                                        ...item,
+                                        id: `infra-${Date.now()}-${idx}`,
+                                        start_month: nextStart,
+                                        end_month: bcData.contractMonths
+                                      };
+
+                                      setBcData({
+                                        ...bcData,
+                                        infrastructure: {
+                                          ...bcData.infrastructure!,
+                                          items: [...bcData.infrastructure!.items, clonedItem]
+                                        }
+                                      });
+                                    }}
+                                    className="p-2 text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
+                                    title="Adicionar rampa para este item"
+                                  >
+                                    <PlusCircle className="w-4 h-4" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    const novoItems = [...(bcData.infrastructure?.items || [])];
+                                    novoItems.splice(idx, 1);
+                                    setBcData({ ...bcData, infrastructure: { ...bcData.infrastructure!, items: novoItems }});
+                                  }}
+                                  className="p-2 text-text-secondary hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                  title="Remover Item"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+              {/* Strategic Summary (Relocated to bottom) */}
+              {bcData.infrastructure?.items && bcData.infrastructure.items.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-2">
+                  <div className="md:col-span-2 space-y-4">
+                    <div className="glass-panel p-4 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col justify-center">
+                      <span className="text-[10px] text-primary uppercase font-bold tracking-widest mb-1">Custo Médio Mensal (TI)</span>
+                      <div className="text-2xl font-display font-bold text-text-primary">
+                        R$ {formatNumber(getDetailedMonthlyTimeline().reduce((acc, m) => acc + m.totalItMonth, 0) / Math.max(1, bcData.contractMonths))}
+                      </div>
+                    </div>
+                    <div className="glass-panel p-4 rounded-2xl border border-border-subtle bg-element-bg/30 flex flex-col justify-center">
+                      <span className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">Total LTV (TI)</span>
+                      <div className="text-xl font-display font-bold text-text-primary">
+                        R$ {formatNumber(getDetailedMonthlyTimeline().reduce((acc, m) => acc + m.totalItMonth, 0))}
+                      </div>
+                    </div>
+                    <div className="glass-panel p-4 rounded-2xl border border-border-subtle bg-element-bg/30 flex flex-col justify-center">
+                      <span className="text-[10px] text-text-secondary uppercase font-bold tracking-widest mb-1">Custo Fim de Contrato (Pico)</span>
+                      <div className="text-xl font-display font-bold text-amber-500">
+                        R$ {formatNumber(getDetailedMonthlyTimeline().slice(-1)[0]?.totalItMonth || 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-3 glass-panel p-5 rounded-2xl border border-border-subtle bg-element-bg/20">
+                    <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
+                      <Cloud className="w-4 h-4" /> Evolução Anual do Custo Mensal (Cloud)
+                    </h4>
+                    <div className="space-y-2 pr-2">
+                      {getYearlyInfraEvolution().map((yearData: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center text-xs py-1.5 border-b border-border-subtle last:border-0 hover:bg-white/5 transition-colors group">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-text-primary">Ano {yearData.year} (Mês {yearData.monthStart} a {yearData.monthEnd})</span>
+                            <span className="text-[9px] text-text-secondary uppercase font-bold tracking-tighter">
+                              OPEX Cloud / Licenciamento Mensal
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[8px] text-text-secondary uppercase font-black tracking-tighter">Mensal:</span>
+                              <span className="font-bold text-text-primary text-xs">R$ {formatNumber(yearData.monthlyCost)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[8px] text-text-secondary uppercase font-black tracking-tighter">Total:</span>
+                              <span className="font-bold text-primary text-xs">R$ {formatNumber(yearData.totalCost)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setView('infra-details')}
+                      className="w-full mt-4 py-3 bg-amber-500/5 border border-amber-500/20 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-amber-500 hover:text-white hover:shadow-lg hover:shadow-amber-500/20 transition-all duration-300 flex items-center justify-center gap-2 group"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" /> Ver Detalhamento Mensal de Infra
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2111,44 +2439,8 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
           )}
         </div>
 
-        {/* Navigation Buttons */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 text-xs text-text-secondary">
-            {saveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" /> Salvando rascunho...</>}
-            {saveStatus === 'saved' && <><Cloud className="w-3 h-3 text-emerald-500" /> Rascunho salvo no banco</>}
-            {saveStatus === 'error' && <><Cloud className="w-3 h-3 text-rose-500" /> Erro ao salvar</>}
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setActiveStep(prev => Math.max(1, prev - 1))}
-              disabled={activeStep === 1 || isSaving}
-              className="px-4 py-2 bg-element-bg border border-border-subtle rounded-xl text-sm font-medium hover:bg-element-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Anterior
-            </button>
-            <button
-              onClick={async () => {
-                if (activeStep < 6) {
-                  const saved = await saveBusinessCase();
-                  if (saved) {
-                    setActiveStep(prev => prev + 1);
-                  }
-                } else {
-                  const saved = await saveBusinessCase();
-                  if (saved) {
-                    alert('Business Case concluído com sucesso!');
-                    setView('overview');
-                  }
-                }
-              }}
-              disabled={isSaving}
-              className="px-6 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-70"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : activeStep === 6 ? <Save className="w-4 h-4" /> : null}
-              {activeStep === 6 ? 'Concluir e Salvar' : 'Próximo'}
-            </button>
-          </div>
-        </div>
+
+
       </motion.div>
     );
   };
@@ -2201,7 +2493,14 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     } catch (err) {
       console.error('Erro ao salvar Business Case:', err);
       setSaveStatus('error');
-      alert('Erro ao salvar progresso. Verifique a conexão com o banco de dados.');
+      setDialogConfig({
+        isOpen: true,
+        title: 'Falha ao Salvar',
+        message: 'Ocorreu um erro ao tentar salvar o Business Case. Por favor, verifique sua conexão e tente novamente.',
+        type: 'danger',
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogConfig(prev => ({ ...prev, isOpen: false }))
+      });
       return false;
     } finally {
       setIsSaving(false);
@@ -2259,6 +2558,33 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
       monthlyCost: data.monthlyCosts.reduce((a, b) => a + b, 0) / data.monthlyCosts.length,
       totalCost: data.monthlyCosts.reduce((a, b) => a + b, 0),
       headcount: data.headcounts.reduce((a, b) => a + b, 0) / data.headcounts.length,
+      monthStart: data.monthStart,
+      monthEnd: data.monthEnd
+    }));
+  };
+
+  const getYearlyInfraEvolution = () => {
+    const years: Record<number, { monthlyCosts: number[], monthStart: number, monthEnd: number }> = {};
+    const [startYear, startMonth] = bcData.startDate.split('-').map(Number);
+    const timeline = getDetailedMonthlyTimeline();
+
+    for (let m = 0; m < bcData.contractMonths; m++) {
+      const currentYear = startYear + Math.floor((startMonth - 1 + m) / 12);
+      if (!years[currentYear]) {
+        years[currentYear] = {
+          monthlyCosts: [],
+          monthStart: m + 1,
+          monthEnd: m + 1
+        };
+      }
+      years[currentYear].monthlyCosts.push(timeline[m]?.totalItMonth || 0);
+      years[currentYear].monthEnd = m + 1;
+    }
+
+    return Object.entries(years).sort((a, b) => Number(a[0]) - Number(b[0])).map(([year, data]) => ({
+      year: Number(year),
+      monthlyCost: data.monthlyCosts.reduce((a, b) => a + b, 0) / data.monthlyCosts.length,
+      totalCost: data.monthlyCosts.reduce((a, b) => a + b, 0),
       monthStart: data.monthStart,
       monthEnd: data.monthEnd
     }));
@@ -2343,6 +2669,8 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
           baseCost = item.cost * (item.premise / 100);
         } else if (item.type === 'batch_instance') {
           baseCost = item.cost * envMultiplier;
+        } else if (item.type === 'fixed_unit_license') {
+          baseCost = item.cost * item.premise;
         } else if (item.type === 'variable_api') {
           baseCost = item.cost * item.premise * Math.max(0, monthVol.volume) * envMultiplier;
         } else if (item.type === 'storage_acumulativo') {
@@ -2352,7 +2680,8 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
         }
 
         const costWithIpca = baseCost * accumulatedIPCAFactor;
-        const finalCost = costWithIpca * (1 + (cloudBuffer / 100));
+        const reflectsBuffer = item.type !== 'shared_fixed' && item.type !== 'fixed_unit_license';
+        const finalCost = reflectsBuffer ? costWithIpca * (1 + (cloudBuffer / 100)) : costWithIpca;
         infraCosts[item.id] = finalCost;
         totalItMonth += finalCost;
       });
@@ -2593,18 +2922,83 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
   };
 
   return (
-    <div>
-      <AnimatePresence mode="wait">
-        {view === 'overview' && renderOverview()}
-        {view === 'new-bc' && renderNewBC()}
-        {view === 'monthly-details' && renderMonthlyDetailsPage()}
-        {view === 'infra-details' && renderInfraDetailsPage()}
+    <div className="min-h-screen bg-surface font-sans text-text-primary p-4 md:p-8">
+      {/* --- GLOBAL CUSTOM DIALOG (RESTORED PREMIUM ANIMATIONS) --- */}
+      <AnimatePresence>
+      {dialogConfig.isOpen && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setDialogConfig(prev => ({ ...prev, isOpen: false }))}
+            className="absolute inset-0 bg-black/70 backdrop-blur-md"
+          />
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="relative w-full max-w-sm glass-panel rounded-[32px] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.6)] border border-white/20 overflow-hidden bg-element-bg z-[1000000]"
+          >
+            <div className={`h-2.5 w-full ${
+              dialogConfig.type === 'danger' ? 'bg-rose-500' :
+              dialogConfig.type === 'warning' ? 'bg-amber-500' : 'bg-primary'
+            }`} />
+            
+            <div className="p-8 pb-10">
+              <div className="flex items-start gap-5 mb-6">
+                <div className={`p-4 rounded-2xl shrink-0 ${
+                  dialogConfig.type === 'danger' ? 'bg-rose-500/20 text-rose-500' :
+                  dialogConfig.type === 'warning' ? 'bg-amber-500/20 text-amber-500' : 'bg-primary/20 text-primary'
+                }`}>
+                  {dialogConfig.type === 'danger' && <XCircle className="w-8 h-8" />}
+                  {dialogConfig.type === 'warning' && <AlertTriangle className="w-8 h-8" />}
+                  {dialogConfig.type === 'info' && <Info className="w-8 h-8" />}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-text-primary leading-tight tracking-tight">{dialogConfig.title}</h3>
+                  <p className="text-[13px] text-text-secondary mt-2.5 leading-relaxed font-medium">{dialogConfig.message}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 mt-10">
+                {dialogConfig.cancelLabel && (
+                  <button
+                    onClick={() => setDialogConfig(prev => ({ ...prev, isOpen: false }))}
+                    className="flex-1 py-4 px-4 rounded-2xl text-[11px] font-black uppercase tracking-widest text-text-secondary hover:bg-white/5 transition-colors border border-white/10"
+                  >
+                    {dialogConfig.cancelLabel}
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    dialogConfig.onConfirm();
+                    setDialogConfig(prev => ({ ...prev, isOpen: false }));
+                  }}
+                  className={`flex-1 py-4 px-4 rounded-2xl text-[11px] font-black uppercase tracking-widest text-white shadow-2xl transition-all active:scale-95 ${
+                    dialogConfig.type === 'danger' ? 'bg-rose-500 shadow-rose-500/40 hover:bg-rose-600' :
+                    dialogConfig.type === 'warning' ? 'bg-amber-500 shadow-amber-500/40 hover:bg-amber-600' :
+                    'bg-primary shadow-primary/40 hover:bg-blue-600'
+                  }`}
+                >
+                  {dialogConfig.confirmLabel || 'Confirmar'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
       </AnimatePresence>
+
+      {view === 'overview' && renderOverview()}
+      {view === 'new-bc' && renderNewBC()}
+      {view === 'monthly-details' && renderMonthlyDetailsPage()}
+      {view === 'infra-details' && renderInfraDetailsPage()}
 
       {/* Catalog Modal */}
       {isInfraCatalogOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface border border-border-subtle rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
+          <div className="bg-surface border border-border-subtle rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
             <div className="flex justify-between items-center p-5 border-b border-border-subtle bg-element-bg">
               <h3 className="text-lg font-bold text-text-primary flex items-center gap-2"><Server className="w-5 h-5 text-primary" /> Catálogo de Infraestrutura</h3>
               <button onClick={() => setIsInfraCatalogOpen(false)} className="text-text-secondary hover:text-rose-500 transition-colors"><X className="w-5 h-5" /></button>
@@ -2640,11 +3034,11 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                   );
                 })}
                 {availableInfraItems.length === 0 && (
-                  <div className="col-span-2 text-center py-12 text-text-secondary text-sm">Nenhum item disponível no banco dedados.</div>
+                  <div className="col-span-2 text-center py-12 text-text-secondary text-sm">Nenhum item disponível no banco de dados.</div>
                 )}
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
       )}
     </div>

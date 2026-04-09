@@ -523,7 +523,7 @@ function PricingRolesManager() {
 
 const pricingTiers = [
   { id: 1, min: 0, max: 1000, franchise: 8312, unit: 8.303, excess: 2.491 },
-  { id: 2, min: 1001, max: 3000, franchise: 8312, unit: 8.303, excess: 2.491 },
+  { id: 2, min: 1001, max: 3000, franchise: 8312, unit: 7.403, excess: 2.491 },
   { id: 3, min: 3001, max: 5000, franchise: 13291, unit: 4.430, excess: 1.941 },
   { id: 4, min: 5001, max: 10000, franchise: 17171, unit: 3.434, excess: 1.520 },
   { id: 5, min: 10001, max: 25000, franchise: 24769, unit: 2.477, excess: 1.204 },
@@ -947,13 +947,11 @@ function PricingSimulator({ model }: { model: 'cascata' | 'serrote' | 'block' | 
                   <td className="px-4 py-2 text-right">{t.max.toLocaleString('pt-BR')}</td>
                   <td className="px-4 py-2 text-right">
                     {model === 'cascata' 
-                      ? formatCurrency(t.id === 1 
-                          ? t.unit * t.max 
-                          : pricingTiers.slice(0, pricingTiers.indexOf(t)).reduce((acc, prev, idx) => {
-                              const prevMaxLimit = idx === 0 ? 0 : pricingTiers[idx-1].max;
-                              const capacity = prev.max - prevMaxLimit;
-                              return acc + (capacity * prev.unit);
-                            }, 0))
+                      ? formatCurrency(pricingTiers.slice(0, pricingTiers.indexOf(t) + 1).reduce((acc, prev, idx) => {
+                          const prevMaxLimit = idx === 0 ? 0 : pricingTiers[idx-1].max;
+                          const capacity = prev.max - prevMaxLimit;
+                          return acc + (capacity * prev.unit);
+                        }, 0))
                       : model === 'block'
                         ? (
                             <div>
@@ -1387,6 +1385,7 @@ function InfraItemsManager() {
     'shared_fixed': 'Compartilhado (Rateio %)',
     'variable_api': 'Transacional (Chamada)',
     'batch_instance': 'Fixo (Batch/Mes)',
+    'fixed_unit_license': 'Licenciamento Unitário',
     'storage_acumulativo': 'Data/Storage Acum.'
   };
 
@@ -1476,6 +1475,7 @@ function InfraItemsManager() {
                   <option value="shared_fixed">Compartilhado (Rateio %)</option>
                   <option value="variable_api">Transacional (Chamada)</option>
                   <option value="batch_instance">Fixo (Batch/Mes)</option>
+                  <option value="fixed_unit_license">Licenciamento Unitário (Fixo)</option>
                   <option value="storage_acumulativo">Data/Storage Acumulativo</option>
                 </select>
               </div>
