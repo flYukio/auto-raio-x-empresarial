@@ -93,6 +93,8 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
     type: 'shared_fixed' as 'shared_fixed' | 'variable_api' | 'batch_instance' | 'storage_acumulativo',
     cost: '', // string for raw input handling before parsing
     premise: '', // represents allocation pct, or qty per client, or mb per client
+    start_month: 1,
+    end_month: 0, // will be synced with bcData.contractMonths
   });
   
   const [isInfraCatalogOpen, setIsInfraCatalogOpen] = useState(false);
@@ -152,8 +154,13 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
       // Sync local display values when data is loaded or reset
       setLocalTargetClients(formatNumber(bcData.targetClients));
       setLocalAvgVolume(formatNumber(bcData.avgVolume));
+      
+      // Update end_month of tempInfraItem if not manually touched and default was 0
+      if (tempInfraItem.end_month === 0) {
+        setTempInfraItem(prev => ({ ...prev, end_month: bcData.contractMonths }));
+      }
     }
-  }, [bcData.id, view]);
+  }, [bcData.id, view, bcData.contractMonths]);
 
   const isDirty = JSON.stringify(bcData) !== lastSavedData;
 
@@ -1921,6 +1928,17 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                         <div className="col-span-2 text-[9px] text-text-secondary leading-tight mt-1">Acúmulo atrelado à Projeção de Volume Mensal do Step 2. O dado crescerá em formato de "bola de neve" gerando passivos para a fatura seguinte.</div>
                       </>
                     )}
+
+                    <div className="col-span-2 pt-2 border-t border-border-subtle mt-1 grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Mês Início</label>
+                        <input type="number" min="1" max={bcData.contractMonths} value={tempInfraItem.start_month} onChange={(e) => setTempInfraItem({ ...tempInfraItem, start_month: parseInt(e.target.value) || 1 })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-text-secondary uppercase font-bold mb-1">Mês Fim</label>
+                        <input type="number" min={tempInfraItem.start_month} max={bcData.contractMonths} value={tempInfraItem.end_month || bcData.contractMonths} onChange={(e) => setTempInfraItem({ ...tempInfraItem, end_month: parseInt(e.target.value) || bcData.contractMonths })} className="w-full bg-surface border border-border-subtle rounded px-2 py-1.5 text-xs font-mono focus:border-primary outline-none" />
+                      </div>
+                    </div>
                   </div>
                   
                   <div className="mt-auto flex justify-end">
@@ -1941,7 +1959,9 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                                 name: tempInfraItem.name,
                                 type: tempInfraItem.type,
                                 cost: parsedCost,
-                                premise: parsedPremise
+                                premise: parsedPremise,
+                                start_month: tempInfraItem.start_month || 1,
+                                end_month: tempInfraItem.end_month || bcData.contractMonths
                               }
                             ]
                           }
@@ -1969,6 +1989,7 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                       <tr>
                         <th className="px-4 py-3 font-bold">Natureza</th>
                         <th className="px-4 py-3 font-bold">Item / Recurso</th>
+                        <th className="px-4 py-3 font-bold text-center">Vigência</th>
                         <th className="px-4 py-3 font-bold text-right pt-r">Base de Cálculo / Setup</th>
                         <th className="px-4 py-3 font-bold text-center">Multiplicador Amb.</th>
                         <th className="px-4 py-3 font-bold text-right text-primary">Custo Mensal (Go-Live)</th>
@@ -1998,6 +2019,11 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
                               </span>
                             </td>
                             <td className="px-4 py-3 font-bold text-xs uppercase">{item.name}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="text-[10px] font-bold text-text-secondary px-2 py-1 bg-element-bg border border-border-subtle rounded-lg">
+                                M{item.start_month || 1} → M{item.end_month || bcData.contractMonths}
+                              </span>
+                            </td>
                             <td className="px-4 py-3 text-right">
                               {item.type === 'shared_fixed' && (
                                 <div className="text-[10px] text-text-secondary"><span className="text-primary font-bold">{item.premise}%</span> sobre Custo Total R$ {formatNumber(item.cost)}</div>
@@ -2302,6 +2328,16 @@ export function PricingEstrategicoView({ userPermissions }: PricingEstrategicoVi
 
       (bcData.infrastructure?.items || []).forEach(item => {
         let baseCost = 0;
+        const startM = item.start_month || 1;
+        const endM = item.end_month || bcData.contractMonths;
+
+        // Skip calculations if month is outside valid range
+        if ((m + 1) < startM || (m + 1) > endM) {
+          // Note: for storage_acumulativo, we might still want to track generated values or not depending on biz logic.
+          // Usually if "not active", it doesn't incur cost.
+          infraCosts[item.id] = 0;
+          return;
+        }
 
         if (item.type === 'shared_fixed') {
           baseCost = item.cost * (item.premise / 100);
